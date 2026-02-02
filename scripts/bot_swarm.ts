@@ -25,7 +25,7 @@ for (let i = 0; i < BOT_COUNT; i++) {
 
     socket.on("room_state", (room) => {
         // Vote if voting is active and we haven't voted yet
-        if (room.status === "voting" && !room.votes[socket.id]) {
+        if (room.status === "voting" && socket.id && !room.votes[socket.id]) {
             const delay = Math.floor(Math.random() * 3000) + 1000; // 1-4s delay
             const deck = room.deck || ["1", "2", "3", "5", "8", "13"];
             const vote = deck[Math.floor(Math.random() * deck.length)];
