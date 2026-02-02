@@ -56,15 +56,15 @@ export default function RoomHeader({
 
     return (
         <header className="h-16 border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-6 z-40 relative">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 min-w-0 flex-1">
                 {!isSidebarOpen && (
-                    <button onClick={onOpenSidebar} className="text-slate-400 hover:text-white">
+                    <button onClick={onOpenSidebar} className="hidden md:block text-slate-400 hover:text-white flex-shrink-0">
                         <List size={20} />
                     </button>
                 )}
-                <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent flex items-center gap-2">
-                    <MountainSnow size={24} className="text-cyan-400" />
-                    {gameName || "Poker Everest"}
+                <h1 className="text-lg md:text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent flex items-center gap-2 truncate max-w-[180px] sm:max-w-[300px] md:max-w-none">
+                    <MountainSnow size={20} className="text-cyan-400 flex-shrink-0 md:w-6 md:h-6" />
+                    <span className="truncate">{gameName || "Poker Everest"}</span>
                 </h1>
                 {status === "voting" && (
                     <div className="flex items-center gap-2 hidden sm:flex">

@@ -190,7 +190,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                 />
 
                 {/* Footer Controls */}
-                <div className="bg-slate-900/90 border-t border-slate-800 p-4 pb-8 flex flex-col items-center gap-4 z-20 backdrop-blur">
+                <div className="bg-slate-900/90 border-t border-slate-800 p-4 pb-12 md:pb-8 flex flex-col items-center gap-4 z-20 backdrop-blur">
 
                     {/* Voting Cards */}
                     <VotingCards

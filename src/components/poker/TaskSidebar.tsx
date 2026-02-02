@@ -47,7 +47,7 @@ export default function TaskSidebar({
                 )}
             </AnimatePresence>
 
-            {/* Sidebar */}
+            {/* Sidebar - Hidden on mobile */}
             <motion.div
                 animate={{
                     width: isOpen ? 280 : 0,
@@ -55,7 +55,7 @@ export default function TaskSidebar({
                     opacity: isOpen ? 1 : 0,
                 }}
                 transition={{ type: "tween", duration: 0.2 }}
-                className="fixed md:relative left-0 top-0 h-full md:h-full bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden z-50 md:z-auto"
+                className="hidden md:flex fixed md:relative left-0 top-0 h-full md:h-full bg-slate-800 border-r border-slate-700 flex-col overflow-hidden z-50 md:z-auto"
             >
                 <div className="p-3 md:p-4 border-b border-slate-700 flex items-center justify-between">
                     <h2 className="font-bold text-white flex items-center gap-2 text-sm md:text-base">
@@ -106,8 +106,8 @@ export default function TaskSidebar({
                                             }
                                         }}
                                         className={`p-2 md:p-1.5 rounded transition-colors flex-shrink-0 ${confirmId === task.id
-                                                ? "bg-red-600 text-white hover:bg-red-700 animate-pulse"
-                                                : "bg-slate-700 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
+                                            ? "bg-red-600 text-white hover:bg-red-700 animate-pulse"
+                                            : "bg-slate-700 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
                                             }`}
                                         title={confirmId === task.id ? "Click again to confirm" : "Delete Task"}
                                     >
