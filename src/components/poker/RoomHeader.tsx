@@ -1,0 +1,142 @@
+"use client";
+
+import { useState } from "react";
+import { Player } from "@/types/room";
+import { List, MountainSnow, Copy, LogOut } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+
+interface RoomHeaderProps {
+    currentTask: string;
+    status: "voting" | "revealed";
+    votedCount: number;
+    totalPlayers: number;
+    players: Player[];
+    currentUser?: Player | null;
+    isSidebarOpen: boolean;
+    onOpenSidebar: () => void;
+    onCopyLink: () => void;
+    onClaimHost: () => void;
+}
+
+export default function RoomHeader({
+    currentTask,
+    status,
+    votedCount,
+    totalPlayers,
+    players,
+    currentUser,
+    isSidebarOpen,
+    onOpenSidebar,
+    onCopyLink,
+    onClaimHost,
+}: RoomHeaderProps) {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+    const handleLogout = () => {
+        // Clear persistence
+        localStorage.removeItem("poker_player_name");
+        localStorage.removeItem("poker_player_avatar");
+        // We also need to remove the joined flag for this room
+        const params = new URLSearchParams(window.location.search);
+        const roomId = params.get("room");
+        if (roomId) {
+            localStorage.removeItem(`poker_joined_${roomId}`);
+        }
+
+        // Reload page to return to entry screen
+        window.location.reload();
+    };
+
+    return (
+        <header className="h-16 border-b border-slate-700/50 bg-slate-900/80 backdrop-blur-md flex items-center justify-between px-6 z-40 relative">
+            <div className="flex items-center gap-4">
+                {!isSidebarOpen && (
+                    <button onClick={onOpenSidebar} className="text-slate-400 hover:text-white">
+                        <List size={20} />
+                    </button>
+                )}
+                <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent flex items-center gap-2">
+                    <MountainSnow size={24} className="text-cyan-400" />
+                    {currentTask || "Poker Everest"}
+                </h1>
+                {status === "voting" && (
+                    <div className="flex items-center gap-2 hidden sm:flex">
+                        <span className="text-xs px-2 py-1 rounded bg-green-500/20 text-green-400 border border-green-500/30 animate-pulse">
+                            VOTING ACTIVE
+                        </span>
+                        <span className={`text-xs px-2 py-1 rounded border ${votedCount === totalPlayers ? 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600'}`}>
+                            {votedCount}/{totalPlayers} voted
+                        </span>
+                    </div>
+                )}
+                {status === "revealed" && (
+                    <span className="text-xs px-2 py-1 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 hidden sm:inline-block">
+                        RESULTS
+                    </span>
+                )}
+            </div>
+
+            <div className="flex items-center gap-3">
+                <button onClick={onCopyLink} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors mr-2" title="Copy Room Link">
+                    <Copy size={18} />
+                </button>
+
+                <div className="h-6 w-px bg-slate-700 mx-1"></div>
+
+                {currentUser && (
+                    <div className="relative">
+                        <button
+                            onClick={() => setIsMenuOpen(!isMenuOpen)}
+                            className="flex items-center gap-2 hover:bg-slate-800 p-1.5 rounded-full transition-colors border border-transparent hover:border-slate-700"
+                        >
+                            <div className="text-right hidden md:block">
+                                <div className="text-xs font-bold text-slate-200">{currentUser.name}</div>
+                            </div>
+                            <div className="w-8 h-8 rounded-full bg-slate-800 border-2 border-cyan-500/50 flex items-center justify-center text-lg shadow-lg shadow-cyan-500/10">
+                                {currentUser.avatar}
+                            </div>
+                        </button>
+
+                        <AnimatePresence>
+                            {isMenuOpen && (
+                                <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setIsMenuOpen(false)}></div>
+                                    <motion.div
+                                        initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                                        className="absolute right-0 top-full mt-2 w-48 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden"
+                                    >
+                                        <div className="p-3 border-b border-slate-700/50">
+                                            <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Signed in as</div>
+                                            <div className="font-medium text-slate-200 truncate">{currentUser.name}</div>
+                                        </div>
+
+                                        <button
+                                            onClick={() => {
+                                                onClaimHost();
+                                                setIsMenuOpen(false);
+                                            }}
+                                            className="w-full text-left px-4 py-3 text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300 transition-colors flex items-center gap-2 border-b border-slate-700/50"
+                                        >
+                                            <MountainSnow size={16} />
+                                            Become Host
+                                        </button>
+
+                                        <button
+                                            onClick={handleLogout}
+                                            className="w-full text-left px-4 py-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors flex items-center gap-2"
+                                        >
+                                            <LogOut size={16} />
+                                            Change Name
+                                        </button>
+                                    </motion.div>
+                                </>
+                            )}
+                        </AnimatePresence>
+                    </div>
+                )}
+            </div>
+        </header>
+    );
+}
