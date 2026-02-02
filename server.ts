@@ -53,8 +53,8 @@ async function main() {
             const roomId = Math.random().toString(36).substring(2, 9).toUpperCase();
 
             const room: Room = {
-                status: "starting",
-                currentTask: "General Planning",
+                status: gameName ? "voting" : "starting",
+                currentTask: gameName || null,
                 tasks: gameName ? [{ id: Date.now().toString(), name: gameName, timestamp: Date.now() }] : [],
                 votes: {},
                 adminId: socket.id,
