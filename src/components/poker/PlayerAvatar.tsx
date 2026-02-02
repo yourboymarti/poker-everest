@@ -140,7 +140,9 @@ export default function PlayerAvatar({
                         animate={isChanged ? "changed" : "visible"}
                         exit="exit"
                         className={`w-7 h-10 md:w-9 md:h-12 rounded-md border-2 flex items-center justify-center text-sm md:text-base font-bold shadow-md transition-colors ${isRevealed
-                            ? "bg-white text-slate-900 border-white"
+                            ? hasChangedMind
+                                ? "bg-amber-500 text-white border-amber-400 shadow-amber-500/30 animate-pulse"
+                                : "bg-white text-slate-900 border-white"
                             : hasChangedMind
                                 ? "bg-blue-600 border-red-500 shadow-red-500/20"
                                 : "bg-blue-600 border-blue-400"

@@ -69,7 +69,8 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
     // Actions
     const castVote = (card: string) => {
-        if (state?.status === "voting") {
+        // Allow voting in both "voting" and "revealed" states (for post-reveal discussions)
+        if (state?.status === "voting" || state?.status === "revealed") {
             setMyVote(card);
             socket.emit("vote", { roomId, value: card });
         }

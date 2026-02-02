@@ -182,7 +182,8 @@ async function main() {
 
         socket.on("vote", async ({ roomId, value }) => {
             const room = await getRoom(roomId);
-            if (room && room.status === "voting") {
+            // Allow voting in both "voting" and "revealed" states (for post-reveal discussions)
+            if (room && (room.status === "voting" || room.status === "revealed")) {
                 room.votes[socket.id] = value;
                 await setRoom(roomId, room);
                 io.to(roomId).emit("room_state", room);
