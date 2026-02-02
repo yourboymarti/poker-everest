@@ -96,7 +96,6 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
     const copyLink = () => {
         navigator.clipboard.writeText(window.location.origin + "?room=" + roomId);
-        alert("Link copied to clipboard!");
     };
 
     // Error state
@@ -157,7 +156,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
             <div className="flex-1 flex flex-col relative bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]">
                 {/* Header */}
                 <RoomHeader
-                    currentTask={state.currentTask}
+                    gameName={state.gameName}
                     status={state.status}
                     votedCount={votedCount}
                     totalPlayers={totalPlayers}
@@ -184,6 +183,8 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     status={state.status}
                     average={average}
                     isHost={isAdmin}
+                    socket={socket}
+                    roomId={roomId}
                     onReveal={revealVotes}
                     onReset={resetRound}
                 />

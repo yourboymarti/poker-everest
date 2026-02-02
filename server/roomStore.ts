@@ -3,6 +3,7 @@ import Redis from "ioredis";
 // Room type definition
 export interface Room {
     status: "starting" | "voting" | "revealed";
+    gameName: string | null;
     currentTask: string | null;
     tasks: { id: string; name: string; timestamp: number; score?: string }[];
     votes: Record<string, string>;

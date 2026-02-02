@@ -51,6 +51,7 @@ function HomeContent() {
 
   const handleCreateGame = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!gameName.trim()) return; // Game name is required
     setIsCreating(true);
 
     // Save name if provided (though create flow usually asks for game name, 
@@ -64,7 +65,7 @@ function HomeContent() {
     // So handleJoinGame is where name is saved.
 
     const socket = io();
-    socket.emit("create_room", { gameName: gameName || "Planning Session" });
+    socket.emit("create_room", { gameName });
     socket.on("room_created", ({ roomId }) => {
       socket.disconnect();
       localStorage.setItem(`room_creator_${roomId}`, 'true');
@@ -145,12 +146,13 @@ function HomeContent() {
           // CREATE FORM
           <form onSubmit={handleCreateGame} className="space-y-6">
             <div>
-              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Game Name</label>
+              <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Game Name <span className="text-red-400">*</span></label>
               <input
                 type="text"
                 value={gameName}
                 onChange={(e) => setGameName(e.target.value)}
                 placeholder="e.g. Sprint 32 Planning"
+                required
                 autoFocus
                 className="w-full bg-slate-900/50 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-cyan-500 transition-all font-medium placeholder:text-slate-600"
               />

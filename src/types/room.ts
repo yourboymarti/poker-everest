@@ -13,6 +13,7 @@ export interface Task {
 
 export interface RoomState {
     status: "starting" | "voting" | "revealed";
+    gameName: string | null;
     currentTask: string;
     tasks: Task[];
     votes: Record<string, string>;

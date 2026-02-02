@@ -6,7 +6,7 @@ import { List, MountainSnow, Copy, LogOut } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface RoomHeaderProps {
-    currentTask: string;
+    gameName: string | null;
     status: "starting" | "voting" | "revealed";
     votedCount: number;
     totalPlayers: number;
@@ -19,7 +19,7 @@ interface RoomHeaderProps {
 }
 
 export default function RoomHeader({
-    currentTask,
+    gameName,
     status,
     votedCount,
     totalPlayers,
@@ -31,6 +31,13 @@ export default function RoomHeader({
     onClaimHost,
 }: RoomHeaderProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [showCopied, setShowCopied] = useState(false);
+
+    const handleCopyLink = () => {
+        onCopyLink();
+        setShowCopied(true);
+        setTimeout(() => setShowCopied(false), 2000);
+    };
 
     const handleLogout = () => {
         // Clear persistence
@@ -57,7 +64,7 @@ export default function RoomHeader({
                 )}
                 <h1 className="text-xl font-bold bg-gradient-to-r from-cyan-400 to-blue-500 bg-clip-text text-transparent flex items-center gap-2">
                     <MountainSnow size={24} className="text-cyan-400" />
-                    {currentTask || "Poker Everest"}
+                    {gameName || "Poker Everest"}
                 </h1>
                 {status === "voting" && (
                     <div className="flex items-center gap-2 hidden sm:flex">
@@ -77,9 +84,23 @@ export default function RoomHeader({
             </div>
 
             <div className="flex items-center gap-3">
-                <button onClick={onCopyLink} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors mr-2" title="Copy Room Link">
-                    <Copy size={18} />
-                </button>
+                <div className="relative">
+                    <button onClick={handleCopyLink} className="p-2 hover:bg-slate-800 rounded-full text-slate-400 transition-colors mr-2" title="Copy Room Link">
+                        <Copy size={18} />
+                    </button>
+                    <AnimatePresence>
+                        {showCopied && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -10 }}
+                                className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-green-500 text-white text-xs font-bold rounded-lg whitespace-nowrap shadow-lg"
+                            >
+                                Link copied!
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
 
                 <div className="h-6 w-px bg-slate-700 mx-1"></div>
 

@@ -53,9 +53,10 @@ async function main() {
             const roomId = Math.random().toString(36).substring(2, 9).toUpperCase();
 
             const room: Room = {
-                status: gameName ? "voting" : "starting",
-                currentTask: gameName || null,
-                tasks: gameName ? [{ id: Date.now().toString(), name: gameName, timestamp: Date.now() }] : [],
+                status: "starting",
+                gameName: gameName || null,
+                currentTask: null,
+                tasks: [],
                 votes: {},
                 adminId: socket.id,
                 players: {},
@@ -74,6 +75,7 @@ async function main() {
             if (!room) {
                 room = {
                     status: "starting",
+                    gameName: null,
                     currentTask: null,
                     tasks: [],
                     votes: {},
@@ -261,6 +263,11 @@ async function main() {
                 io.in(roomId).socketsJoin(newRoomId);
                 io.in(roomId).socketsLeave(roomId);
             }
+        });
+
+        socket.on("shake_beer", ({ roomId, playerId }) => {
+            // Broadcast to all in room (including sender)
+            io.to(roomId).emit("beer_shaking", { playerId });
         });
 
         socket.on("claim_host", async ({ roomId, userId }) => {

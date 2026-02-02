@@ -14,13 +14,13 @@ interface PlayerAvatarProps {
     isRevealed: boolean;
     position: { x: number; y: number };
     showInfo: boolean;
+    isShaking: boolean;
+    onShakeBeer: () => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
 }
 
-function BeerGlass({ style }: { style?: React.CSSProperties }) {
-    const [isShaking, setIsShaking] = useState(false);
-
+function BeerGlass({ style, isShaking, onShake }: { style?: React.CSSProperties; isShaking: boolean; onShake: () => void }) {
     return (
         <motion.div
             className="absolute text-2xl cursor-pointer z-0 select-none bg-slate-800/20 rounded-full px-1 hover:bg-slate-700/80 transition-colors"
@@ -31,8 +31,7 @@ function BeerGlass({ style }: { style?: React.CSSProperties }) {
             } : {}}
             onClick={(e) => {
                 e.stopPropagation();
-                setIsShaking(true);
-                setTimeout(() => setIsShaking(false), 1500);
+                onShake();
             }}
             whileHover={{ scale: 1.2 }}
         >
@@ -50,6 +49,8 @@ export default function PlayerAvatar({
     isRevealed,
     position,
     showInfo,
+    isShaking,
+    onShakeBeer,
     onMouseEnter,
     onMouseLeave
 }: PlayerAvatarProps) {
@@ -89,12 +90,16 @@ export default function PlayerAvatar({
             {/* Avatar + Name Column */}
             <div className={`flex flex-col items-center gap-1 relative`}>
                 {/* Beer Glass - positioned on table side */}
-                <BeerGlass style={{
-                    left: "50%",
-                    top: "50%",
-                    marginLeft: beerX - 12, // -12 to center the emoji (half width)
-                    marginTop: beerY - 12
-                }} />
+                <BeerGlass
+                    isShaking={isShaking}
+                    onShake={onShakeBeer}
+                    style={{
+                        left: "50%",
+                        top: "50%",
+                        marginLeft: beerX - 12, // -12 to center the emoji (half width)
+                        marginTop: beerY - 12
+                    }}
+                />
 
                 <div className={`relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 flex items-center justify-center text-xl sm:text-2xl shadow-lg bg-slate-900 z-10 transition-colors ${hasVoted ? "border-green-500 shadow-green-900/30" : "border-slate-600"}`}>
                     {player.avatar}
