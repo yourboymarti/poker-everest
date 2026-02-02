@@ -7,7 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 interface RoomHeaderProps {
     currentTask: string;
-    status: "voting" | "revealed";
+    status: "starting" | "voting" | "revealed";
     votedCount: number;
     totalPlayers: number;
     players: Player[];
