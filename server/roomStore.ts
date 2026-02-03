@@ -34,14 +34,22 @@ const ROOM_PREFIX = "poker:room:";
 const ROOM_TTL = 60 * 60 * 24; // 24 hours
 
 export async function initRedis(): Promise<void> {
-    const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
+    const redisUrl = process.env.REDIS_URL;
+
+    if (!redisUrl && process.env.NODE_ENV === "production") {
+        console.warn("⚠️ REDIS_URL not set in production. Defaulting to in-memory storage.");
+        useInMemory = true;
+        return;
+    }
+
+    const urlToUse = redisUrl || "redis://localhost:6379";
 
     try {
         // Mask credentials for logging
-        const maskedUrl = redisUrl.replace(/:\/\/[^:]+:[^@]+@/, "://***:***@");
+        const maskedUrl = urlToUse.replace(/:\/\/[^:]+:[^@]+@/, "://***:***@");
         console.log(`🔌 Attempting to connect to Redis at: ${maskedUrl}`);
 
-        redis = new Redis(redisUrl, {
+        redis = new Redis(urlToUse, {
             maxRetriesPerRequest: 1,
             retryStrategy: () => null, // Don't retry on connection failure
             connectTimeout: 3000,
