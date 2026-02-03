@@ -8,17 +8,21 @@ Designed for agile teams to estimate tasks with style.
 ## ✨ Features
 
 *   **Real-time Interaction**: Instant voting and revealing using WebSockets.
-*   **Persistent Host**: Host status is saved even if you refresh the page.
-*   **Voting Results**: Average scores are automatically calculated and saved to the sidebar next to each task.
+*   **Interactive Reactions**:
+    *   Throw emojis (🎯 🍻 💩 ❤️) at other players with fun physics! 🚀
+    *   Shake your beer glass by clicking on it 🍺.
+    *   Fly-in animations with gravity and bouncing effects.
+*   **Voting Tools**:
+    *   **Voting Timer** ⏱️: Keep your standups efficient.
+    *   **Consensus Mode**: Confetti explosions when everyone agrees 🎉.
+    *   **Results**: Auto-calculated averages saved per task.
+*   **Room Management**:
+    *   **Smart Link Sharing**: One-click copy with visual feedback.
+    *   **Task Sidebar**: Create, track, and manage voting tasks easily.
+    *   **Persistent Host**: Admin rights are saved even on refresh.
 *   **Immersive UI**:
     *   3D-style poker table.
-    *   Interactive avatars with beer glass animations 🍺.
-    *   Confetti explosions on consensus 🎉.
-*   **Task Management**:
-    *   Add/Delete tasks dynamically.
-    *   Sidebar overview of all tasks and their scores.
-    *   "Starting" status for empty rooms.
-*   **Bot-Free**: Host privileges don't jump to inactive users/bots on disconnect.
+    *   Glassmorphism design with responsive visuals.
 
 ## 🛠️ Tech Stack
 
