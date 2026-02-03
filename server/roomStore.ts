@@ -50,9 +50,17 @@ export async function initRedis(): Promise<void> {
         console.log(`🔌 Attempting to connect to Redis at: ${maskedUrl}`);
 
         redis = new Redis(urlToUse, {
-            maxRetriesPerRequest: 1,
-            retryStrategy: () => null, // Don't retry on connection failure
-            connectTimeout: 3000,
+            maxRetriesPerRequest: 3,
+            retryStrategy: (times) => {
+                if (times > 3) {
+                    console.warn("⚠️ Redis retry limit reached. Switching to in-memory.");
+                    return null; // Stop retrying
+                }
+                const delay = Math.min(times * 100, 2000);
+                console.log(`🔄 Retrying Redis connection attempt ${times} in ${delay}ms...`);
+                return delay;
+            },
+            connectTimeout: 5000, // Increased timeout
         });
 
         // Prevent unhandled error events from crashing the process
