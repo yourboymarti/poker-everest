@@ -5,11 +5,20 @@ export interface Room {
     status: "starting" | "voting" | "revealed";
     gameName: string | null;
     currentTask: string | null;
-    tasks: { id: string; name: string; timestamp: number; score?: string }[];
+    tasks: {
+        id: string;
+        name: string;
+        timestamp: number;
+        score?: string;
+        voteDetails?: {
+            playerName: string;
+            vote: string | null;
+        }[];
+    }[];
     votes: Record<string, string>;
     adminId: string;
-    adminUserId?: string; // Persistent user ID for admin recovery
-    players: Record<string, { id: string; name: string; avatar: string; isHost?: boolean }>;
+    adminUserId: string; // Persistent user ID for admin recovery
+    players: Record<string, { id: string; userId: string; name: string; avatar: string; isHost?: boolean }>;
     deck: string[];
     // Timer
     timerDuration: number | null; // seconds, null = no timer

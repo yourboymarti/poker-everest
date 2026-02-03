@@ -28,6 +28,9 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
     const [newTaskName, setNewTaskName] = useState("");
 
     const [isSidebarOpen, setSidebarOpen] = useState(true);
+    const [hasAttemptedRestore, setHasAttemptedRestore] = useState(false);
+    const [lastDeletedTask, setLastDeletedTask] = useState<{ id: string; name: string; timestamp: number; score?: string; voteDetails?: any } | null>(null);
+    const [undoTimeout, setUndoTimeout] = useState<NodeJS.Timeout | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [myId, setMyId] = useState<string | null>(null);
 
@@ -67,31 +70,40 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
         };
     }, [roomId, userName, avatar]);
 
-    // Persistence: Save tasks to localStorage
+    // Persistence: Save/Clear tasks in localStorage
     useEffect(() => {
-        if (state?.tasks && state.tasks.length > 0) {
-            localStorage.setItem(`poker_tasks_${roomId}`, JSON.stringify(state.tasks));
+        if (state?.tasks) {
+            if (state.tasks.length > 0) {
+                localStorage.setItem(`poker_tasks_${roomId}`, JSON.stringify(state.tasks));
+            } else if (hasAttemptedRestore) {
+                // If the list is empty and we've already tried restoring, it means the user intentionally cleared it.
+                // We should clear the backup to prevent it from coming back on refresh.
+                localStorage.removeItem(`poker_tasks_${roomId}`);
+            }
         }
-    }, [state?.tasks, roomId]);
+    }, [state?.tasks, roomId, hasAttemptedRestore]);
 
     // Persistence: Restore tasks if room is empty and user is admin
     useEffect(() => {
         const isAdmin = state?.adminId === socket?.id;
-        if (isConnected && state && state.tasks.length === 0 && isAdmin) {
-            const savedTasks = localStorage.getItem(`poker_tasks_${roomId}`);
-            if (savedTasks) {
-                try {
-                    const tasks = JSON.parse(savedTasks);
-                    if (Array.isArray(tasks) && tasks.length > 0) {
-                        console.log("Restoring tasks from backup...", tasks.length);
-                        socket.emit("restore_tasks", { roomId, tasks });
+        if (isConnected && state && !hasAttemptedRestore && isAdmin) {
+            if (state.tasks.length === 0) {
+                const savedTasks = localStorage.getItem(`poker_tasks_${roomId}`);
+                if (savedTasks) {
+                    try {
+                        const tasks = JSON.parse(savedTasks);
+                        if (Array.isArray(tasks) && tasks.length > 0) {
+                            console.log("Restoring tasks from backup...", tasks.length);
+                            socket.emit("restore_tasks", { roomId, tasks });
+                        }
+                    } catch (e) {
+                        console.error("Failed to parse saved tasks", e);
                     }
-                } catch (e) {
-                    console.error("Failed to parse saved tasks", e);
                 }
             }
+            setHasAttemptedRestore(true);
         }
-    }, [isConnected, state?.tasks.length, state?.adminId, roomId]);
+    }, [isConnected, state?.tasks.length, state?.adminId, roomId, hasAttemptedRestore]);
 
     // Actions
     const castVote = (card: string) => {
@@ -114,7 +126,39 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
     };
 
     const deleteTask = (taskId: string) => {
+        const taskToDelete = state?.tasks.find(t => t.id === taskId);
+        if (taskToDelete) {
+            setLastDeletedTask(taskToDelete);
+
+            // Clear previous timeout if any
+            if (undoTimeout) clearTimeout(undoTimeout);
+
+            // Set new timeout to clear the undo option
+            const timeout = setTimeout(() => {
+                setLastDeletedTask(null);
+                setUndoTimeout(null);
+            }, 5000);
+            setUndoTimeout(timeout);
+        }
+
         socket.emit("delete_task", { roomId, taskId });
+    };
+
+    const undoDelete = () => {
+        if (lastDeletedTask) {
+            console.log("Undoing delete for task:", lastDeletedTask.name, lastDeletedTask.id);
+            // Restore by sending the task back as a single-item array to restore_tasks
+            socket.emit("restore_tasks", { roomId, tasks: [lastDeletedTask] });
+
+            // Clear state
+            setLastDeletedTask(null);
+            if (undoTimeout) {
+                clearTimeout(undoTimeout);
+                setUndoTimeout(null);
+            }
+        } else {
+            console.log("Undo failed: lastDeletedTask is null");
+        }
     };
 
     const startVoting = (taskId: string) => {
@@ -145,7 +189,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
     // Derived state
     const activeDeck = state.deck || ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "?", "☕"];
-    const isAdmin = state.adminId === socket.id;
+    const isAdmin = state.adminUserId === getPersistentUserId();
     const playersList = Object.values(state.players);
     const votedCount = Object.keys(state.votes).length;
     const totalPlayers = playersList.length;
@@ -222,6 +266,24 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     />
                 </div>
             </div>
+
+            {/* Undo Notification */}
+            {lastDeletedTask && (
+                <div className="fixed bottom-24 left-6 md:bottom-8 md:left-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="bg-slate-800 border border-indigo-500/50 rounded-xl p-4 shadow-2xl flex items-center gap-4 backdrop-blur-md">
+                        <div className="flex flex-col">
+                            <span className="text-sm font-medium text-slate-200">Задача удалена</span>
+                            <span className="text-xs text-slate-400 max-w-[150px] truncate">"{lastDeletedTask.name}"</span>
+                        </div>
+                        <button
+                            onClick={undoDelete}
+                            className="bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold py-2 px-4 rounded-lg transition-all active:scale-95 shadow-lg shadow-indigo-500/20"
+                        >
+                            ОТМЕНИТЬ
+                        </button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

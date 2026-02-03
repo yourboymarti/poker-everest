@@ -59,6 +59,7 @@ async function main() {
                 tasks: [],
                 votes: {},
                 adminId: socket.id,
+                adminUserId: "", // Will be set on first join
                 players: {},
                 deck: DEFAULT_DECK,
                 timerDuration: null,
@@ -109,6 +110,7 @@ async function main() {
 
             room.players[socket.id] = {
                 id: socket.id,
+                userId: userId,
                 name: userName,
                 avatar,
                 isHost: room.adminId === socket.id
@@ -122,7 +124,8 @@ async function main() {
 
         socket.on("add_task", async ({ roomId, taskName }) => {
             const room = await getRoom(roomId);
-            if (room) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 const newTask = { id: Date.now().toString(), name: taskName, timestamp: Date.now() };
                 room.tasks.push(newTask);
                 await setRoom(roomId, room);
@@ -131,27 +134,40 @@ async function main() {
         });
 
         socket.on("restore_tasks", async ({ roomId, tasks }) => {
+            console.log(`[RESTORE] Room: ${roomId}, tasks: ${tasks?.length}`);
             const room = await getRoom(roomId);
-            if (room && room.adminId === socket.id && room.tasks.length === 0) {
-                // Only allow restore if room is empty and user is admin
-                // Map incoming simple tasks to full task objects
-                const restoredTasks = tasks.map((t: any) => ({
-                    id: t.id || Date.now().toString() + Math.random(),
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
+                if (!Array.isArray(tasks)) return;
+                const restored = tasks.map((t: any) => ({
+                    id: t.id || `undo_${Date.now()}`,
                     name: t.name,
                     timestamp: t.timestamp || Date.now(),
-                    score: t.score // Preserve score if exists
+                    score: t.score,
+                    voteDetails: t.voteDetails
                 }));
 
-                room.tasks = restoredTasks;
-                await setRoom(roomId, room);
-                io.to(roomId).emit("room_state", room);
-                console.log(`Restored ${restoredTasks.length} tasks for room ${roomId}`);
+                // Append unique tasks to the current list
+                const existingIds = new Set(room.tasks.map(t => t.id).filter(id => !!id));
+                const uniqueNew = restored.filter((t: any) => !existingIds.has(t.id));
+
+                if (uniqueNew.length > 0) {
+                    room.tasks = [...room.tasks, ...uniqueNew];
+                    await setRoom(roomId, room);
+                    io.to(roomId).emit("room_state", room);
+                    console.log(`[RESTORE] Added ${uniqueNew.length} tasks. Total count: ${room.tasks.length}`);
+                } else {
+                    console.log("[RESTORE] No unique tasks identified for restoration.");
+                }
+            } else {
+                console.log(`[RESTORE] Denied. Admin: ${room?.adminId}, Socket: ${socket.id}`);
             }
         });
 
         socket.on("delete_task", async ({ roomId, taskId }) => {
             const room = await getRoom(roomId);
-            if (room && room.adminId === socket.id) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 const taskToDelete = room.tasks.find(t => t.id === taskId);
                 room.tasks = room.tasks.filter(t => t.id !== taskId);
 
@@ -177,7 +193,8 @@ async function main() {
 
         socket.on("start_voting", async ({ roomId, taskId, timerSeconds }) => {
             const room = await getRoom(roomId);
-            if (room) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 const task = room.tasks.find((t) => t.id === taskId);
                 if (task) {
                     room.currentTask = task.name;
@@ -211,7 +228,8 @@ async function main() {
 
         socket.on("reveal", async ({ roomId }) => {
             const room = await getRoom(roomId);
-            if (room) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 room.status = "revealed";
                 room.votingEndTime = null; // Clear timer
                 await setRoom(roomId, room);
@@ -221,12 +239,19 @@ async function main() {
 
         socket.on("reset_round", async ({ roomId }) => {
             const room = await getRoom(roomId);
-            if (room) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 // Save score to current task if revealed
                 if (room.status === "revealed" && room.currentTask) {
                     const numericVotes = Object.values(room.votes)
                         .map(v => parseFloat(v))
                         .filter(v => !isNaN(v));
+
+                    // Capture all current players and their votes (or lack thereof)
+                    const voteDetails = Object.values(room.players).map(player => ({
+                        playerName: player.name,
+                        vote: room.votes[player.id] || null
+                    }));
 
                     if (numericVotes.length > 0) {
                         const average = (numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length).toFixed(1);
@@ -234,7 +259,12 @@ async function main() {
                         // Find and update task
                         const taskIndex = room.tasks.findIndex(t => t.name === room.currentTask);
                         if (taskIndex !== -1) {
-                            room.tasks[taskIndex].score = average;
+                            room.tasks[taskIndex] = {
+                                ...room.tasks[taskIndex],
+                                score: average,
+                                voteDetails: voteDetails
+                            };
+                            console.log(`✅ [SERVER] Saved voteDetails for task "${room.currentTask}":`, JSON.stringify(voteDetails));
                         }
                     } else {
                         // Handle non-numeric consensus (e.g. all Coffee)
@@ -242,7 +272,12 @@ async function main() {
                         if (voteValues.length > 0 && voteValues.every(v => v === voteValues[0])) {
                             const taskIndex = room.tasks.findIndex(t => t.name === room.currentTask);
                             if (taskIndex !== -1) {
-                                room.tasks[taskIndex].score = voteValues[0];
+                                room.tasks[taskIndex] = {
+                                    ...room.tasks[taskIndex],
+                                    score: voteValues[0],
+                                    voteDetails: voteDetails
+                                };
+                                console.log(`✅ [SERVER] Saved consensus voteDetails for task "${room.currentTask}":`, JSON.stringify(voteDetails));
                             }
                         }
                     }
@@ -251,13 +286,21 @@ async function main() {
                 room.status = "voting";
                 room.votes = {};
                 await setRoom(roomId, room);
+
+                // Debug log the specific task that was just updated
+                const updatedTaskIndex = room.tasks.findIndex(t => t.name === (room.currentTask || ""));
+                if (updatedTaskIndex !== -1) {
+                    console.log(`📤 [SERVER] Emitting updated task state:`, JSON.stringify(room.tasks[updatedTaskIndex]));
+                }
+
                 io.to(roomId).emit("room_state", room);
             }
         });
 
         socket.on("change_deck", async ({ roomId, deck }) => {
             const room = await getRoom(roomId);
-            if (room && room.adminId === socket.id) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 room.deck = deck;
                 room.votes = {}; // Clear votes when deck changes
                 await setRoom(roomId, room);
@@ -267,7 +310,8 @@ async function main() {
 
         socket.on("update_room_code", async ({ roomId }) => {
             const room = await getRoom(roomId);
-            if (room) {
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
                 const newRoomId = Math.random().toString(36).substring(2, 9).toUpperCase();
                 await setRoom(newRoomId, room);
                 await deleteRoom(roomId);
@@ -285,10 +329,6 @@ async function main() {
             }
         });
 
-        socket.on("shake_beer", ({ roomId, playerId }) => {
-            // Broadcast to all in room (including sender)
-            io.to(roomId).emit("beer_shaking", { playerId });
-        });
 
         socket.on("send_reaction", ({ roomId, playerId, emoji }) => {
             io.to(roomId).emit("emoji_reaction", { playerId, emoji });
@@ -297,19 +337,20 @@ async function main() {
         socket.on("claim_host", async ({ roomId, userId }) => {
             const room = await getRoom(roomId);
             if (room) {
-                const oldAdminId = room.adminId;
-                if (oldAdminId && room.players[oldAdminId]) {
-                    room.players[oldAdminId].isHost = false;
+                // If there's an active admin, only allow reclaiming if it's the SAME persistent user
+                if (room.adminId && room.players[room.adminId]) {
+                    if (room.adminUserId !== userId) {
+                        return; // Forbidden
+                    }
                 }
 
                 room.adminId = socket.id;
-                if (userId) {
-                    room.adminUserId = userId;
-                }
+                room.adminUserId = userId;
 
-                if (room.players[socket.id]) {
-                    room.players[socket.id].isHost = true;
-                }
+                // Sync isHost flag for all players
+                Object.values(room.players).forEach(p => {
+                    p.isHost = p.userId === userId;
+                });
 
                 await setRoom(roomId, room);
                 io.to(roomId).emit("room_state", room);

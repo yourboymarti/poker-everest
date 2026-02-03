@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Clock } from "lucide-react";
 import { Player } from "@/types/room";
 
-const REACTION_EMOJIS = ["🎯", "🍻", "💩", "❤️"];
+const REACTION_EMOJIS = ["🎯", "🚀", "💩", "❤️"];
 
 interface PlayerAvatarProps {
     player: Player;
@@ -16,33 +16,12 @@ interface PlayerAvatarProps {
     isRevealed: boolean;
     position: { x: number; y: number };
     showInfo: boolean;
-    isShaking: boolean;
     receivedReaction?: { emoji: string; id: number } | null;
-    onShakeBeer: () => void;
     onSendReaction: (emoji: string) => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
 }
 
-function BeerGlass({ style, isShaking, onShake }: { style?: React.CSSProperties; isShaking: boolean; onShake: () => void }) {
-    return (
-        <motion.div
-            className="absolute text-2xl cursor-pointer z-0 select-none bg-slate-800/20 rounded-full px-1 hover:bg-slate-700/80 transition-colors"
-            style={style}
-            animate={isShaking ? {
-                rotate: [0, 25, -20, 15, -10, 5, 0],
-                transition: { duration: 1.5, ease: "easeInOut" }
-            } : {}}
-            onClick={(e) => {
-                e.stopPropagation();
-                onShake();
-            }}
-            whileHover={{ scale: 1.2 }}
-        >
-            🍺
-        </motion.div>
-    );
-}
 
 export default function PlayerAvatar({
     player,
@@ -53,9 +32,7 @@ export default function PlayerAvatar({
     isRevealed,
     position,
     showInfo,
-    isShaking,
     receivedReaction,
-    onShakeBeer,
     onSendReaction,
     onMouseEnter,
     onMouseLeave
@@ -99,12 +76,6 @@ export default function PlayerAvatar({
         }
     }, [receivedReaction]);
 
-    // Calculate position for beer (towards the center)
-    const angle = Math.atan2(position.y, position.x);
-    // Distance from avatar center towards table center
-    const beerDistance = 55;
-    const beerX = -Math.cos(angle) * beerDistance;
-    const beerY = -Math.sin(angle) * beerDistance;
 
     const handleSendReaction = (emoji: string) => {
         onSendReaction(emoji);
@@ -128,17 +99,6 @@ export default function PlayerAvatar({
         >
             {/* Avatar + Name Column */}
             <div className={`flex flex-col items-center gap-1 relative`}>
-                {/* Beer Glass - positioned on table side */}
-                <BeerGlass
-                    isShaking={isShaking}
-                    onShake={onShakeBeer}
-                    style={{
-                        left: "50%",
-                        top: "50%",
-                        marginLeft: beerX - 12, // -12 to center the emoji (half width)
-                        marginTop: beerY - 12
-                    }}
-                />
 
                 {/* Emoji Reaction Buttons */}
                 <AnimatePresence>

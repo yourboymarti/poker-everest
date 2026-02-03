@@ -32,6 +32,7 @@ export default function TaskSidebar({
 }: TaskSidebarProps) {
     const [confirmId, setConfirmId] = useState<string | null>(null);
     const [isAddingTask, setIsAddingTask] = useState(false);
+    const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -141,50 +142,97 @@ export default function TaskSidebar({
                     {tasks.map(task => (
                         <div
                             key={task.id}
-                            className={`p-2.5 md:p-3 rounded-lg border flex items-center justify-between gap-2 ${currentTask === task.name
+                            className={`rounded-lg border overflow-hidden flex flex-col transition-all ${currentTask === task.name
                                 ? "bg-cyan-900/30 border-cyan-500/50"
                                 : "bg-slate-700/30 border-slate-700"
                                 }`}
                         >
-                            <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <span className={`text-xs md:text-sm font-medium truncate ${currentTask === task.name ? "text-cyan-300" : "text-slate-300"}`}>
-                                    {task.name}
-                                </span>
-                                {task.score && (
-                                    <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 font-bold">
-                                        {task.score}
+                            <div
+                                className="p-2.5 md:p-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                                onClick={() => {
+                                    console.log("Task clicked:", task.id, "Name:", task.name);
+                                    console.log("Task voteDetails:", JSON.stringify(task.voteDetails));
+                                    console.log("Full task object keys:", Object.keys(task));
+                                    setExpandedTaskId(expandedTaskId === task.id ? null : task.id);
+                                }}
+                            >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <span className={`text-xs md:text-sm font-medium truncate ${currentTask === task.name ? "text-cyan-300" : "text-slate-300"}`}>
+                                        {task.name}
                                     </span>
-                                )}
-                            </div>
-                            {isAdmin && (
-                                <div className="flex items-center gap-1">
-                                    <button
-                                        onClick={() => onStartVoting(task.id)}
-                                        className="p-2 md:p-1.5 rounded bg-cyan-600 text-white transition-colors hover:bg-cyan-500 flex-shrink-0"
-                                        title="Start Voting"
-                                    >
-                                        <Play size={12} fill="currentColor" />
-                                    </button>
-                                    <button
-                                        onClick={() => {
-                                            if (confirmId === task.id) {
-                                                onDeleteTask(task.id);
-                                                setConfirmId(null);
-                                            } else {
-                                                setConfirmId(task.id);
-                                                setTimeout(() => setConfirmId(null), 3000);
-                                            }
-                                        }}
-                                        className={`p-2 md:p-1.5 rounded transition-colors flex-shrink-0 ${confirmId === task.id
-                                            ? "bg-red-600 text-white hover:bg-red-700 animate-pulse"
-                                            : "bg-slate-700 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
-                                            }`}
-                                        title={confirmId === task.id ? "Click again to confirm" : "Delete Task"}
-                                    >
-                                        {confirmId === task.id ? <AlertCircle size={12} /> : <Trash2 size={12} />}
-                                    </button>
+                                    {task.score && (
+                                        <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 font-bold">
+                                            {task.score}
+                                        </span>
+                                    )}
                                 </div>
-                            )}
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                    {isAdmin && (
+                                        <>
+                                            <button
+                                                onClick={() => onStartVoting(task.id)}
+                                                className="p-2 md:p-1.5 rounded bg-cyan-600 text-white transition-colors hover:bg-cyan-500 flex-shrink-0"
+                                                title="Start Voting"
+                                            >
+                                                <Play size={12} fill="currentColor" />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (confirmId === task.id) {
+                                                        onDeleteTask(task.id);
+                                                        setConfirmId(null);
+                                                    } else {
+                                                        setConfirmId(task.id);
+                                                        setTimeout(() => setConfirmId(null), 3000);
+                                                    }
+                                                }}
+                                                className={`p-2 md:p-1.5 rounded transition-colors flex-shrink-0 ${confirmId === task.id
+                                                    ? "bg-red-600 text-white hover:bg-red-700 animate-pulse"
+                                                    : "bg-slate-700 text-slate-400 hover:bg-red-900/50 hover:text-red-400"
+                                                    }`}
+                                                title={confirmId === task.id ? "Click again to confirm" : "Delete Task"}
+                                            >
+                                                {confirmId === task.id ? <AlertCircle size={12} /> : <Trash2 size={12} />}
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Expanded Details */}
+                            <AnimatePresence>
+                                {expandedTaskId === task.id && (
+                                    <motion.div
+                                        initial={{ height: 0, opacity: 0 }}
+                                        animate={{ height: "auto", opacity: 1 }}
+                                        exit={{ height: 0, opacity: 0 }}
+                                        className="border-t border-slate-700 bg-slate-800/50"
+                                    >
+                                        <div className="p-3 space-y-1.5">
+                                            <div className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1">
+                                                Voting History
+                                            </div>
+                                            {task.voteDetails ? (
+                                                <>
+                                                    {task.voteDetails.map((detail, idx) => (
+                                                        <div key={idx} className="flex items-center justify-between text-xs">
+                                                            <span className="text-slate-400 truncate mr-2">{detail.playerName}</span>
+                                                            <span className={`font-bold ${detail.vote ? "text-cyan-400" : "text-slate-600 italic"}`}>
+                                                                {detail.vote || "Did not vote"}
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                    {task.voteDetails.length === 0 && (
+                                                        <div className="text-[10px] text-slate-600 italic">No voting details captured</div>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <div className="text-[10px] text-slate-600 italic">No voting history yet for this task. Reveal and reset to see details.</div>
+                                            )}
+                                        </div>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
                         </div>
                     ))}
 
