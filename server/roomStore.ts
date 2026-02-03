@@ -37,6 +37,10 @@ export async function initRedis(): Promise<void> {
     const redisUrl = process.env.REDIS_URL || "redis://localhost:6379";
 
     try {
+        // Mask credentials for logging
+        const maskedUrl = redisUrl.replace(/:\/\/[^:]+:[^@]+@/, "://***:***@");
+        console.log(`🔌 Attempting to connect to Redis at: ${maskedUrl}`);
+
         redis = new Redis(redisUrl, {
             maxRetriesPerRequest: 1,
             retryStrategy: () => null, // Don't retry on connection failure
