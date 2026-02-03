@@ -130,6 +130,25 @@ async function main() {
             }
         });
 
+        socket.on("restore_tasks", async ({ roomId, tasks }) => {
+            const room = await getRoom(roomId);
+            if (room && room.adminId === socket.id && room.tasks.length === 0) {
+                // Only allow restore if room is empty and user is admin
+                // Map incoming simple tasks to full task objects
+                const restoredTasks = tasks.map((t: any) => ({
+                    id: t.id || Date.now().toString() + Math.random(),
+                    name: t.name,
+                    timestamp: t.timestamp || Date.now(),
+                    score: t.score // Preserve score if exists
+                }));
+
+                room.tasks = restoredTasks;
+                await setRoom(roomId, room);
+                io.to(roomId).emit("room_state", room);
+                console.log(`Restored ${restoredTasks.length} tasks for room ${roomId}`);
+            }
+        });
+
         socket.on("delete_task", async ({ roomId, taskId }) => {
             const room = await getRoom(roomId);
             if (room && room.adminId === socket.id) {

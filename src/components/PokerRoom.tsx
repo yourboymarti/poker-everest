@@ -67,6 +67,32 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
         };
     }, [roomId, userName, avatar]);
 
+    // Persistence: Save tasks to localStorage
+    useEffect(() => {
+        if (state?.tasks && state.tasks.length > 0) {
+            localStorage.setItem(`poker_tasks_${roomId}`, JSON.stringify(state.tasks));
+        }
+    }, [state?.tasks, roomId]);
+
+    // Persistence: Restore tasks if room is empty and user is admin
+    useEffect(() => {
+        const isAdmin = state?.adminId === socket?.id;
+        if (isConnected && state && state.tasks.length === 0 && isAdmin) {
+            const savedTasks = localStorage.getItem(`poker_tasks_${roomId}`);
+            if (savedTasks) {
+                try {
+                    const tasks = JSON.parse(savedTasks);
+                    if (Array.isArray(tasks) && tasks.length > 0) {
+                        console.log("Restoring tasks from backup...", tasks.length);
+                        socket.emit("restore_tasks", { roomId, tasks });
+                    }
+                } catch (e) {
+                    console.error("Failed to parse saved tasks", e);
+                }
+            }
+        }
+    }, [isConnected, state?.tasks.length, state?.adminId, roomId]);
+
     // Actions
     const castVote = (card: string) => {
         // Allow voting in both "voting" and "revealed" states (for post-reveal discussions)
