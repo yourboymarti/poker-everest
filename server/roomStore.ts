@@ -43,6 +43,11 @@ export async function initRedis(): Promise<void> {
             connectTimeout: 3000,
         });
 
+        // Prevent unhandled error events from crashing the process
+        redis.on("error", (err) => {
+            console.warn("⚠️ Redis connection issue:", err.message);
+        });
+
         // Test connection
         await redis.ping();
         console.log("✅ Redis connected successfully");
