@@ -31,6 +31,20 @@ export default function TaskSidebar({
     onStartVoting,
 }: TaskSidebarProps) {
     const [confirmId, setConfirmId] = useState<string | null>(null);
+    const [isAddingTask, setIsAddingTask] = useState(false);
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (newTaskName.trim()) {
+            onAddTask(e);
+            setIsAddingTask(false);
+        }
+    };
+
+    const handleCancel = () => {
+        setIsAddingTask(false);
+        onNewTaskChange("");
+    };
 
     return (
         <>
@@ -68,6 +82,62 @@ export default function TaskSidebar({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-2">
+                    {/* Add Task Button / Form */}
+                    {isAdmin && (
+                        <AnimatePresence mode="wait">
+                            {isAddingTask ? (
+                                <motion.form
+                                    key="form"
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    onSubmit={handleSubmit}
+                                    className="mb-3"
+                                >
+                                    <div className="bg-slate-700/50 rounded-lg p-3 border border-slate-600">
+                                        <textarea
+                                            value={newTaskName}
+                                            onChange={(e) => onNewTaskChange(e.target.value)}
+                                            placeholder="Enter a title for the task"
+                                            className="w-full bg-slate-800 border border-slate-600 rounded-lg p-3 text-sm focus:outline-none focus:border-cyan-500 transition-colors resize-none min-h-[80px] text-slate-200 placeholder-slate-500"
+                                            autoFocus
+                                        />
+                                        <div className="flex gap-2 mt-3">
+                                            <button
+                                                type="button"
+                                                onClick={handleCancel}
+                                                className="flex-1 py-2 px-4 rounded-lg border border-slate-600 text-slate-300 font-medium hover:bg-slate-700 transition-colors"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={!newTaskName.trim()}
+                                                className="flex-1 py-2 px-4 rounded-lg bg-cyan-500 text-slate-900 font-bold hover:bg-cyan-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                Save
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.form>
+                            ) : (
+                                <motion.button
+                                    key="button"
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    type="button"
+                                    onClick={() => setIsAddingTask(true)}
+                                    className="w-full p-3 rounded-lg bg-slate-700/50 border border-slate-600 text-slate-400 font-medium flex items-center gap-3 hover:bg-slate-700 hover:text-slate-300 hover:border-slate-500 transition-colors mb-3"
+                                >
+                                    <Plus size={18} />
+                                    Add a task
+                                </motion.button>
+                            )}
+                        </AnimatePresence>
+                    )}
+
+                    {/* Task List */}
                     {tasks.map(task => (
                         <div
                             key={task.id}
@@ -117,27 +187,11 @@ export default function TaskSidebar({
                             )}
                         </div>
                     ))}
-                    {tasks.length === 0 && (
+
+                    {tasks.length === 0 && !isAddingTask && (
                         <div className="text-slate-500 text-xs md:text-sm text-center italic py-4">No tasks yet</div>
                     )}
                 </div>
-
-                {isAdmin && (
-                    <form onSubmit={onAddTask} className="p-3 md:p-4 border-t border-slate-700 bg-slate-800/50">
-                        <div className="relative">
-                            <input
-                                type="text"
-                                value={newTaskName}
-                                onChange={(e) => onNewTaskChange(e.target.value)}
-                                placeholder="New Task..."
-                                className="w-full bg-slate-900 border border-slate-600 rounded-lg py-2 pl-3 pr-10 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
-                            />
-                            <button type="submit" className="absolute right-1 top-1 p-1.5 md:p-1 bg-slate-700 rounded hover:bg-cyan-600 text-white transition-colors" disabled={!newTaskName.trim()}>
-                                <Plus size={14} className="md:w-4 md:h-4" />
-                            </button>
-                        </div>
-                    </form>
-                )}
             </motion.div>
         </>
     );

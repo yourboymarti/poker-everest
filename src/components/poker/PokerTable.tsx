@@ -110,7 +110,7 @@ export default function PokerTable({
                             <div className="text-slate-500 font-medium text-sm sm:text-base h-6">
                                 {status === "starting"
                                     ? "Add a task to start..."
-                                    : (status === "voting" ? "" : "Waiting for round to start")}
+                                    : (status === "voting" ? "Pick your card" : "Waiting for round to start")}
                             </div>
 
                             {isHost && status === "voting" && (

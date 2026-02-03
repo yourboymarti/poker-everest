@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
-import { Timer } from "lucide-react";
+
 
 import { RoomState } from "@/types/room";
-import { TaskSidebar, RoomHeader, PokerTable, VotingCards, VotingTimer, ConsensusConfetti } from "./poker";
+import { TaskSidebar, RoomHeader, PokerTable, VotingCards, ConsensusConfetti } from "./poker";
 
 let socket: Socket;
 
@@ -167,14 +167,8 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     onOpenSidebar={() => setSidebarOpen(true)}
                     onCopyLink={copyLink}
                     onClaimHost={() => socket.emit("claim_host", { roomId, userId: getPersistentUserId() })}
+                    isHost={isAdmin}
                 />
-
-                {/* Timer Display */}
-                {state.status === "voting" && state.votingEndTime && (
-                    <div className="absolute top-20 right-6 z-30">
-                        <VotingTimer votingEndTime={state.votingEndTime} />
-                    </div>
-                )}
 
                 {/* Poker Table */}
                 <PokerTable
