@@ -271,6 +271,10 @@ async function main() {
             io.to(roomId).emit("beer_shaking", { playerId });
         });
 
+        socket.on("send_reaction", ({ roomId, playerId, emoji }) => {
+            io.to(roomId).emit("emoji_reaction", { playerId, emoji });
+        });
+
         socket.on("claim_host", async ({ roomId, userId }) => {
             const room = await getRoom(roomId);
             if (room) {

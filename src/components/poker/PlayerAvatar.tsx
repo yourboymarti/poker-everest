@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Check, Clock } from "lucide-react";
 import { Player } from "@/types/room";
 
+const REACTION_EMOJIS = ["🎯", "🍻", "💩", "❤️"];
+
 interface PlayerAvatarProps {
     player: Player;
     isAdmin: boolean;
@@ -15,7 +17,9 @@ interface PlayerAvatarProps {
     position: { x: number; y: number };
     showInfo: boolean;
     isShaking: boolean;
+    receivedReaction?: { emoji: string; id: number } | null;
     onShakeBeer: () => void;
+    onSendReaction: (emoji: string) => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
 }
@@ -50,13 +54,17 @@ export default function PlayerAvatar({
     position,
     showInfo,
     isShaking,
+    receivedReaction,
     onShakeBeer,
+    onSendReaction,
     onMouseEnter,
     onMouseLeave
 }: PlayerAvatarProps) {
     const prevVote = useRef(vote);
     const [isChanged, setIsChanged] = useState(false);
     const [hasChangedMind, setHasChangedMind] = useState(false);
+    const [showReactionButtons, setShowReactionButtons] = useState(false);
+    const [flyingEmojis, setFlyingEmojis] = useState<{ id: number; emoji: string; side: number; seed: number }[]>([]);
 
     useEffect(() => {
         if (!hasVoted) {
@@ -71,6 +79,26 @@ export default function PlayerAvatar({
         prevVote.current = vote;
     }, [vote, hasVoted]);
 
+    // Show received reaction animation
+    useEffect(() => {
+        if (receivedReaction) {
+            const newEmoji = {
+                id: receivedReaction.id, // Use the ID from server/table (unique per click)
+                emoji: receivedReaction.emoji,
+                side: Math.random() > 0.5 ? -700 : 700, // Start from further away
+                seed: Math.random() * 20 - 10 // Random Y offset for variation
+            };
+
+            setFlyingEmojis((prev) => [...prev, newEmoji]);
+
+            // Remove after animation completes (5s)
+            const timer = setTimeout(() => {
+                setFlyingEmojis((prev) => prev.filter(e => e.id !== newEmoji.id));
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [receivedReaction]);
+
     // Calculate position for beer (towards the center)
     const angle = Math.atan2(position.y, position.x);
     // Distance from avatar center towards table center
@@ -78,14 +106,25 @@ export default function PlayerAvatar({
     const beerX = -Math.cos(angle) * beerDistance;
     const beerY = -Math.sin(angle) * beerDistance;
 
+    const handleSendReaction = (emoji: string) => {
+        onSendReaction(emoji);
+        // setShowReactionButtons(false); // Keep open for spamming!
+    };
+
     return (
         <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1, x: position.x, y: position.y }}
             className="absolute flex items-center gap-2 scale-65 sm:scale-75 md:scale-90 group z-10 hover:z-20"
             style={{ marginLeft: 0, marginTop: 0 }}
-            onMouseEnter={onMouseEnter}
-            onMouseLeave={onMouseLeave}
+            onMouseEnter={() => {
+                onMouseEnter();
+                setShowReactionButtons(true);
+            }}
+            onMouseLeave={() => {
+                onMouseLeave();
+                setShowReactionButtons(false);
+            }}
         >
             {/* Avatar + Name Column */}
             <div className={`flex flex-col items-center gap-1 relative`}>
@@ -100,6 +139,58 @@ export default function PlayerAvatar({
                         marginTop: beerY - 12
                     }}
                 />
+
+                {/* Emoji Reaction Buttons */}
+                <AnimatePresence>
+                    {showReactionButtons && (
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                            className="absolute -top-10 left-1/2 transform -translate-x-1/2 flex gap-1 bg-slate-800/90 backdrop-blur-sm rounded-full px-2 py-1 border border-slate-700 shadow-xl z-30"
+                        >
+                            {REACTION_EMOJIS.map((emoji) => (
+                                <motion.button
+                                    key={emoji}
+                                    whileHover={{ scale: 1.3 }}
+                                    whileTap={{ scale: 0.9 }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleSendReaction(emoji);
+                                    }}
+                                    className="text-lg hover:bg-slate-700/50 rounded-full w-7 h-7 flex items-center justify-center transition-colors"
+                                >
+                                    {emoji}
+                                </motion.button>
+                            ))}
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Flying Emoji Animation */}
+                <AnimatePresence>
+                    {flyingEmojis.map((item) => (
+                        <motion.div
+                            key={item.id}
+                            initial={{ opacity: 0, scale: 0.5, x: item.side, y: item.seed }}
+                            animate={{
+                                opacity: [0, 1, 1, 0],
+                                scale: [0.5, 1.2, 1, 0.8],
+                                x: [item.side, 0, 0, 0],
+                                y: [item.seed, -20, -10, 80], // Hit above center (-20), slight bounce (-10), then fall (80)
+                                rotate: [0, item.side > 0 ? -180 : 180, item.side > 0 ? -200 : 200, item.side > 0 ? -220 : 220]
+                            }}
+                            transition={{
+                                duration: 5,
+                                times: [0, 0.3, 0.5, 1], // Fast throw (0.3s), brief hover/bounce (0.2s), then fall
+                                ease: ["circOut", "easeInOut", "circIn"] // Decelerate on hit, float, accelerate down
+                            }}
+                            className="absolute top-0 left-1/2 -ml-3 text-2xl z-40 pointer-events-none"
+                        >
+                            {item.emoji}
+                        </motion.div>
+                    ))}
+                </AnimatePresence>
 
                 <div className={`relative w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-full border-2 flex items-center justify-center text-xl sm:text-2xl shadow-lg bg-slate-900 z-10 transition-colors ${hasVoted ? "border-green-500 shadow-green-900/30" : "border-slate-600"}`}>
                     {player.avatar}

@@ -35,6 +35,7 @@ export default function PokerTable({
     const [dimensions, setDimensions] = useState({ radiusX: 190, radiusY: 130 });
     const [isAnyHovered, setIsAnyHovered] = useState(false);
     const [shakingPlayerId, setShakingPlayerId] = useState<string | null>(null);
+    const [emojiReaction, setEmojiReaction] = useState<{ playerId: string; emoji: string; id: number } | null>(null);
 
     // Listen for beer shaking events from server
     useEffect(() => {
@@ -45,9 +46,16 @@ export default function PokerTable({
             setTimeout(() => setShakingPlayerId(null), 1500);
         };
 
+        const handleEmojiReaction = ({ playerId, emoji }: { playerId: string; emoji: string }) => {
+            setEmojiReaction({ playerId, emoji, id: Date.now() + Math.random() }); // Ensure uniqueness even for simultaneous events
+            // We don't verify timeout here, we let PlayerAvatar handle the animation queue
+        };
+
         socket.on("beer_shaking", handleBeerShaking);
+        socket.on("emoji_reaction", handleEmojiReaction);
         return () => {
             socket.off("beer_shaking", handleBeerShaking);
+            socket.off("emoji_reaction", handleEmojiReaction);
         };
     }, [socket]);
 
@@ -140,7 +148,9 @@ export default function PokerTable({
                             position={{ x, y }}
                             showInfo={isAnyHovered}
                             isShaking={shakingPlayerId === player.id}
+                            receivedReaction={emojiReaction?.playerId === player.id ? emojiReaction : null}
                             onShakeBeer={() => socket?.emit("shake_beer", { roomId, playerId: player.id })}
+                            onSendReaction={(emoji) => socket?.emit("send_reaction", { roomId, playerId: player.id, emoji })}
                             onMouseEnter={() => setIsAnyHovered(true)}
                             onMouseLeave={() => setIsAnyHovered(false)}
                         />

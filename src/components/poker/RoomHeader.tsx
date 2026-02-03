@@ -169,16 +169,7 @@ export default function RoomHeader({
                                         <div className="font-medium text-slate-200 truncate">{currentUser.name}</div>
                                     </div>
 
-                                    <button
-                                        onClick={() => {
-                                            onClaimHost();
-                                            setIsMenuOpen(false);
-                                        }}
-                                        className="w-full text-left px-4 py-3 text-cyan-400 hover:bg-cyan-500/10 hover:text-cyan-300 transition-colors flex items-center gap-2 border-b border-slate-700/50"
-                                    >
-                                        <MountainSnow size={16} />
-                                        Become Host
-                                    </button>
+
 
                                     <button
                                         onClick={handleLogout}
