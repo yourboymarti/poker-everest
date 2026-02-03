@@ -116,6 +116,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
     const revealVotes = () => socket.emit("reveal", { roomId });
     const resetRound = () => socket.emit("reset_round", { roomId });
+    const endRound = () => socket.emit("end_round", { roomId });
 
     const addTask = (e: React.FormEvent) => {
         e.preventDefault();
@@ -252,6 +253,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     roomId={roomId}
                     onReveal={revealVotes}
                     onReset={resetRound}
+                    onEndRound={endRound}
                 />
 
                 {/* Footer Controls */}

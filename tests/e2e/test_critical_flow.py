@@ -41,6 +41,12 @@ def test_full_poker_flow(page: Page):
     page.get_by_role("button", name="Reveal Cards").click()
     expect(page.get_by_text("5.0")).to_be_visible()
     expect(page.get_by_text("Average")).to_be_visible()
+
+    # 6.5 End Round
+    page.get_by_role("button", name="END ROUND").click()
+    expect(page.get_by_role("button", name="RESET ROUND")).not_to_be_visible()
+    expect(page.get_by_role("button", name="END ROUND")).not_to_be_visible()
+    expect(page.get_by_text("Add a task to start...")).to_be_visible()
     
     # 7. Delete Task and Undo
     # Ensure Sidebar is open (it should be by default)

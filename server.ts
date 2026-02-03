@@ -297,6 +297,70 @@ async function main() {
             }
         });
 
+        socket.on("end_round", async ({ roomId }) => {
+            const room = await getRoom(roomId);
+            const player = room?.players[socket.id];
+            if (room && player && room.adminUserId === player.userId) {
+                // Unlike reset_round, we don't save stats again because they should have been saved 
+                // when revealing (or we assume the goal is just to clear the table)
+                // Actually, typically we save stats on 'reveal' or 'reset'. 
+                // The current existing 'reset_round' does the saving. 
+                // If the user clicks "End Round", we should arguably perform the same saving as reset 
+                // BUT clear the current task so we go to idle state.
+
+                // Let's duplicate the saving logic for safety to ensure results are captured 
+                // if they weren't somehow (though usually we capture on reset? No, existing code captures on reset).
+                // Wait, existing code captures on RESET. If we END round, we should also capture.
+
+                if (room.status === "revealed" && room.currentTask) {
+                    const numericVotes = Object.values(room.votes)
+                        .map(v => parseFloat(v))
+                        .filter(v => !isNaN(v));
+
+                    // Capture all current players and their votes (or lack thereof)
+                    const voteDetails = Object.values(room.players).map(player => ({
+                        playerName: player.name,
+                        vote: room.votes[player.id] || null
+                    }));
+
+                    if (numericVotes.length > 0) {
+                        const average = (numericVotes.reduce((a, b) => a + b, 0) / numericVotes.length).toFixed(1);
+
+                        // Find and update task
+                        const taskIndex = room.tasks.findIndex(t => t.name === room.currentTask);
+                        if (taskIndex !== -1) {
+                            room.tasks[taskIndex] = {
+                                ...room.tasks[taskIndex],
+                                score: average,
+                                voteDetails: voteDetails
+                            };
+                        }
+                    } else {
+                        // Handle non-numeric consensus
+                        const voteValues = Object.values(room.votes);
+                        if (voteValues.length > 0 && voteValues.every(v => v === voteValues[0])) {
+                            const taskIndex = room.tasks.findIndex(t => t.name === room.currentTask);
+                            if (taskIndex !== -1) {
+                                room.tasks[taskIndex] = {
+                                    ...room.tasks[taskIndex],
+                                    score: voteValues[0],
+                                    voteDetails: voteDetails
+                                };
+                            }
+                        }
+                    }
+                }
+
+                room.currentTask = null;
+                room.status = "starting";
+                room.votes = {};
+                room.votingEndTime = null;
+
+                await setRoom(roomId, room);
+                io.to(roomId).emit("room_state", room);
+            }
+        });
+
         socket.on("change_deck", async ({ roomId, deck }) => {
             const room = await getRoom(roomId);
             const player = room?.players[socket.id];

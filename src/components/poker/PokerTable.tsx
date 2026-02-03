@@ -17,6 +17,7 @@ interface PokerTableProps {
     roomId: string;
     onReveal: () => void;
     onReset: () => void;
+    onEndRound: () => void;
 }
 
 export default function PokerTable({
@@ -29,7 +30,8 @@ export default function PokerTable({
     socket,
     roomId,
     onReveal,
-    onReset
+    onReset,
+    onEndRound
 }: PokerTableProps) {
     // Default to mobile size
     const [dimensions, setDimensions] = useState({ radiusX: 190, radiusY: 130 });
@@ -101,9 +103,14 @@ export default function PokerTable({
                             )}
 
                             {isHost && (
-                                <button onClick={onReset} className="mt-4 bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-full font-bold transition-colors border border-slate-500 shadow-lg">
-                                    RESET ROUND
-                                </button>
+                                <div className="flex flex-col gap-2 mt-4">
+                                    <button onClick={onReset} className="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-full font-bold transition-colors border border-slate-500 shadow-lg">
+                                        RESET ROUND
+                                    </button>
+                                    <button onClick={onEndRound} className="bg-red-900/50 hover:bg-red-900/70 text-red-200 px-6 py-2 rounded-full font-bold transition-colors border border-red-800/50 text-sm">
+                                        END ROUND
+                                    </button>
+                                </div>
                             )}
                         </div>
                     ) : (
