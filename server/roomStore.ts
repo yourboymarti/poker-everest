@@ -23,6 +23,7 @@ export interface Room {
     // Timer
     timerDuration: number | null; // seconds, null = no timer
     votingEndTime: number | null; // timestamp when voting ends
+    createdAt: number; // Timestamp when room was created
 }
 
 // Try to connect to Redis, fallback to in-memory if not available
@@ -75,6 +76,31 @@ export async function initRedis(): Promise<void> {
         console.log("⚠️ Redis not available, using in-memory storage");
         useInMemory = true;
         redis = null;
+    }
+}
+
+/**
+ * Clean up in-memory rooms that are older than the TTL.
+ * This is only relevant when running in in-memory mode (fallback).
+ */
+export function cleanupStaleRooms(): void {
+    if (!useInMemory) return;
+
+    const now = Date.now();
+    const ttlMs = ROOM_TTL * 1000;
+    let deletedCount = 0;
+
+    for (const roomId in inMemoryRooms) {
+        const room = inMemoryRooms[roomId];
+        // If room is older than TTL, delete it
+        if (room.createdAt && (now - room.createdAt > ttlMs)) {
+            delete inMemoryRooms[roomId];
+            deletedCount++;
+        }
+    }
+
+    if (deletedCount > 0) {
+        console.log(`🧹 [InMemory Cleanup] Removed ${deletedCount} stale rooms.`);
     }
 }
 

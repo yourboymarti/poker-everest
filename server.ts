@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import next from "next";
 import { Server } from "socket.io";
-import { initRedis, getRoom, setRoom, deleteRoom, getAllRoomIds, Room } from "./server/roomStore";
+import { initRedis, getRoom, setRoom, deleteRoom, getAllRoomIds, Room, cleanupStaleRooms } from "./server/roomStore";
 import { DEFAULT_DECK } from "./shared/deckPresets";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -46,6 +46,11 @@ async function main() {
         }
     }, 1000);
 
+    // Cleanup interval for stale in-memory rooms (runs every 1 hour)
+    setInterval(() => {
+        cleanupStaleRooms();
+    }, 60 * 60 * 1000);
+
     io.on("connection", (socket) => {
         console.log("Client connected:", socket.id);
 
@@ -63,7 +68,9 @@ async function main() {
                 players: {},
                 deck: DEFAULT_DECK,
                 timerDuration: null,
-                votingEndTime: null
+                timerDuration: null,
+                votingEndTime: null,
+                createdAt: Date.now()
             };
 
             await setRoom(roomId, room);
@@ -85,7 +92,9 @@ async function main() {
                     players: {},
                     deck: DEFAULT_DECK,
                     timerDuration: null,
-                    votingEndTime: null
+                    timerDuration: null,
+                    votingEndTime: null,
+                    createdAt: Date.now()
                 };
             }
 
