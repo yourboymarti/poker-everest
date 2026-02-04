@@ -68,7 +68,6 @@ async function main() {
                 players: {},
                 deck: DEFAULT_DECK,
                 timerDuration: null,
-                timerDuration: null,
                 votingEndTime: null,
                 createdAt: Date.now()
             };
@@ -91,7 +90,6 @@ async function main() {
                     adminUserId: userId, // Set initial adminUserId
                     players: {},
                     deck: DEFAULT_DECK,
-                    timerDuration: null,
                     timerDuration: null,
                     votingEndTime: null,
                     createdAt: Date.now()

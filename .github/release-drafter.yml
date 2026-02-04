@@ -5,7 +5,6 @@ categories:
     labels:
       - 'feature'
       - 'feat'
-      - 'enhancement'
   - title: '🐛 Bug Fixes'
     labels:
       - 'fix'
@@ -15,20 +14,25 @@ categories:
       - 'chore'
       - 'maintenance'
       - 'refactor'
+      - 'docs'
 change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
-change-title-escapes: '\<*_&'
 version-resolver:
   major:
     labels:
       - 'major'
+      - 'breaking'
   minor:
     labels:
       - 'minor'
+      - 'feature'
+      - 'feat'
   patch:
     labels:
       - 'patch'
+      - 'fix'
+      - 'bug'
+      - 'chore'
   default: patch
 template: |
   ## Changes
-
   $CHANGES
