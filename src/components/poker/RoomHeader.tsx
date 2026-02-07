@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Player } from "@/types/room";
-import { List, MountainSnow, Copy, Check, LogOut, Link } from "lucide-react";
+import { List, MountainSnow, Copy, Check, LogOut, Link, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import VotingTimer from "./VotingTimer";
 
@@ -11,13 +11,18 @@ interface RoomHeaderProps {
     status: "starting" | "voting" | "revealed";
     votedCount: number;
     totalPlayers: number;
-    players: Player[];
     currentUser?: Player | null;
     isSidebarOpen: boolean;
     onOpenSidebar: () => void;
     onCopyLink: () => void;
     onClaimHost: () => void;
     isHost: boolean;
+    timerDuration: number | null;
+    votingEndTime: number | null;
+    onStartTimer: (totalSeconds: number) => void;
+    onAddMinute: () => void;
+    onRestartTimer: () => void;
+    onCancelTimer: () => void;
 }
 
 export default function RoomHeader({
@@ -25,13 +30,18 @@ export default function RoomHeader({
     status,
     votedCount,
     totalPlayers,
-    players,
     currentUser,
     isSidebarOpen,
     onOpenSidebar,
     onCopyLink,
     onClaimHost,
     isHost,
+    timerDuration,
+    votingEndTime,
+    onStartTimer,
+    onAddMinute,
+    onRestartTimer,
+    onCancelTimer,
 }: RoomHeaderProps) {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [showCopied, setShowCopied] = useState(false);
@@ -88,7 +98,16 @@ export default function RoomHeader({
 
             <div className="flex items-center gap-2">
                 {/* Timer */}
-                <VotingTimer isHost={isHost} />
+                <VotingTimer
+                    isHost={isHost}
+                    status={status}
+                    timerDuration={timerDuration}
+                    votingEndTime={votingEndTime}
+                    onStartTimer={onStartTimer}
+                    onAddMinute={onAddMinute}
+                    onRestartTimer={onRestartTimer}
+                    onCancelTimer={onCancelTimer}
+                />
 
                 {/* Desktop: Room link button */}
                 <button
@@ -106,7 +125,7 @@ export default function RoomHeader({
                     ) : (
                         <>
                             <Link size={16} className="text-cyan-400" />
-                            Game's URL
+                            Game URL
                         </>
                     )}
                 </button>
@@ -169,7 +188,15 @@ export default function RoomHeader({
                                         <div className="font-medium text-slate-200 truncate">{currentUser.name}</div>
                                     </div>
 
-
+                                    {!isHost && (
+                                        <button
+                                            onClick={onClaimHost}
+                                            className="w-full text-left px-4 py-3 text-amber-300 hover:bg-amber-500/10 hover:text-amber-200 transition-colors flex items-center gap-2 border-b border-slate-700/50"
+                                        >
+                                            <Crown size={16} />
+                                            Reclaim Host
+                                        </button>
+                                    )}
 
                                     <button
                                         onClick={handleLogout}

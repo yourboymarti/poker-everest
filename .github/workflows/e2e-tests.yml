@@ -31,7 +31,10 @@ jobs:
         cache: 'npm'
 
     - name: Install Node dependencies
-      run: npm install
+      run: npm ci
+
+    - name: Lint
+      run: npm run lint
 
     - name: Build Next.js app
       run: npm run build
@@ -41,6 +44,12 @@ jobs:
         npm run start &
         # Wait for the server to be ready
         npx wait-on http://localhost:3000
+
+    - name: Check Operational Endpoints
+      run: |
+        curl --fail http://localhost:3000/healthz
+        curl --fail http://localhost:3000/readyz
+        curl --fail http://localhost:3000/metrics
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -57,7 +66,9 @@ jobs:
       run: playwright install --with-deps chromium
 
     - name: Run Python E2E tests
-      run: pytest tests/e2e/test_critical_flow.py
+      run: |
+        pytest tests/e2e/test_critical_flow.py
+        pytest tests/e2e/test_admin_flow.py
       env:
         REDIS_URL: redis://localhost:6379
 

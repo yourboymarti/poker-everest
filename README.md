@@ -69,6 +69,20 @@ Since this application uses a custom Node.js server for WebSockets, it **cannot*
 *   **Render** (Web Service)
 *   **VPS** (DigitalOcean, Hetzner) with Docker/PM2.
 
+## 📈 Observability
+
+The server exposes operational endpoints:
+
+*   `GET /healthz` — liveness.
+*   `GET /readyz` — readiness + storage mode state.
+*   `GET /metrics` — Prometheus-compatible app metrics.
+*   Sentry (optional): set `SENTRY_DSN` (+ optional `SENTRY_TRACES_SAMPLE_RATE`) for runtime error tracking.
+
+For SLO targets, alerts and runbook, see `OPERATIONS.md`.
+Alert templates and dashboard starter files are in:
+*   `observability/alerts/prometheus-rules.yml`
+*   `observability/dashboards/poker-everest-overview.json`
+
 ## 🤝 Contributing
 
 1.  Fork the project.

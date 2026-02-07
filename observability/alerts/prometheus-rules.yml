@@ -1,0 +1,42 @@
+groups:
+  - name: poker-everest-runtime
+    rules:
+      - alert: PokerServerDown
+        expr: up{job="poker-everest"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: poker-everest
+        annotations:
+          summary: "Poker Everest server is down"
+          description: "Prometheus cannot scrape poker-everest for more than 2 minutes."
+
+      - alert: PokerRedisNotReady
+        expr: poker_redis_ready{job="poker-everest"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: poker-everest
+        annotations:
+          summary: "Poker Everest redis is not ready"
+          description: "App reports redis not ready for more than 2 minutes."
+
+      - alert: PokerSocketDisconnectSpike
+        expr: rate(poker_socket_disconnections_total{job="poker-everest"}[5m]) > (rate(poker_socket_connections_total{job="poker-everest"}[5m]) + 1)
+        for: 10m
+        labels:
+          severity: warning
+          service: poker-everest
+        annotations:
+          summary: "Socket disconnect spike detected"
+          description: "Disconnect rate is unexpectedly high compared to new connections."
+
+      - alert: PokerUnexpectedAutoRevealSpike
+        expr: rate(poker_timer_auto_reveals_total{job="poker-everest"}[10m]) > 2
+        for: 10m
+        labels:
+          severity: info
+          service: poker-everest
+        annotations:
+          summary: "Timer auto-reveal spike"
+          description: "Auto-revealed rounds are higher than expected, check timer behavior."

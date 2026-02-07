@@ -4,7 +4,7 @@ import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import PokerRoom from "@/components/PokerRoom";
 import { AVATARS } from "@/components/AvatarSelector";
-import { MountainSnow, ArrowRight, Plus, Users } from "lucide-react";
+import { MountainSnow, ArrowRight, Plus } from "lucide-react";
 import { motion } from "framer-motion";
 import { io } from "socket.io-client";
 
@@ -54,21 +54,13 @@ function HomeContent() {
     if (!gameName.trim()) return; // Game name is required
     setIsCreating(true);
 
-    // Save name if provided (though create flow usually asks for game name, 
-    // but if we add name input to create flow later, this is ready. 
-    // Current create flow implies creator joins as Admin. 
-    // Wait, PokerRoom handles asking for name if not provided? 
-    // Page.tsx checks joined && roomParam. 
-    // If I create game, I push room param.
-    // Then Page re-renders, sees roomParam. 
-    // Then it shows JOIN FORM.
-    // So handleJoinGame is where name is saved.
-
     const socket = io();
     socket.emit("create_room", { gameName });
-    socket.on("room_created", ({ roomId }) => {
+    socket.on("room_created", ({ roomId, hostKey }) => {
       socket.disconnect();
-      localStorage.setItem(`room_creator_${roomId}`, 'true');
+      if (typeof hostKey === "string" && hostKey.length > 0) {
+        localStorage.setItem(`room_host_key_${roomId}`, hostKey);
+      }
       router.push(`/?room=${roomId}`);
     });
   };

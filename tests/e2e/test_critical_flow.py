@@ -27,7 +27,7 @@ def test_full_poker_flow(page: Page):
     page.get_by_placeholder("Enter a title for the task").fill("Feature: Auth")
     page.get_by_role("button", name="Save").click()
     
-    expect(page.get_by_text("Feature: Auth")).to_be_visible()
+    expect(page.locator("span", has_text="Feature: Auth").first).to_be_visible()
     
     # 4. Start Voting
     page.get_by_title("Start Voting").click()
@@ -64,7 +64,7 @@ def test_full_poker_flow(page: Page):
     
     # Undo
     page.get_by_role("button", name="ОТМЕНИТЬ").click()
-    expect(page.get_by_text("Feature: Auth")).to_be_visible()
+    expect(page.locator("span", has_text="Feature: Auth").first).to_be_visible()
 
 @pytest.fixture(scope="session", autouse=True)
 def setup_playwright(playwright):

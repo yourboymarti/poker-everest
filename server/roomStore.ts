@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { logInfo, logWarn } from "./logger";
 
 // Room type definition
 export interface Room {
@@ -17,8 +18,8 @@ export interface Room {
     }[];
     votes: Record<string, string>;
     adminId: string;
-    adminUserId: string; // Persistent user ID for admin recovery
-    players: Record<string, { id: string; userId: string; name: string; avatar: string; isHost?: boolean }>;
+    adminKey: string; // Secret key used to recover host privileges
+    players: Record<string, { id: string; name: string; avatar: string; isHost?: boolean }>;
     deck: string[];
     // Timer
     timerDuration: number | null; // seconds, null = no timer
@@ -34,11 +35,21 @@ const inMemoryRooms: Record<string, Room> = {};
 const ROOM_PREFIX = "poker:room:";
 const ROOM_TTL = 60 * 60 * 24; // 24 hours
 
+export interface StoreHealth {
+    mode: "redis" | "memory";
+    redisConfigured: boolean;
+    redisConnected: boolean;
+    fallbackActive: boolean;
+}
+
 export async function initRedis(): Promise<void> {
     const redisUrl = process.env.REDIS_URL;
 
     if (!redisUrl && process.env.NODE_ENV === "production") {
-        console.warn("⚠️ REDIS_URL not set in production. Defaulting to in-memory storage.");
+        logWarn("store.redis_url_missing", {
+            fallback: "memory",
+            nodeEnv: process.env.NODE_ENV,
+        });
         useInMemory = true;
         return;
     }
@@ -48,17 +59,17 @@ export async function initRedis(): Promise<void> {
     try {
         // Mask credentials for logging
         const maskedUrl = urlToUse.replace(/:\/\/[^:]+:[^@]+@/, "://***:***@");
-        console.log(`🔌 Attempting to connect to Redis at: ${maskedUrl}`);
+        logInfo("store.redis_connect_attempt", { redisUrl: maskedUrl });
 
         redis = new Redis(urlToUse, {
             maxRetriesPerRequest: 3,
             retryStrategy: (times) => {
                 if (times > 3) {
-                    console.warn("⚠️ Redis retry limit reached. Switching to in-memory.");
+                    logWarn("store.redis_retry_limit_reached", { retries: times, fallback: "memory" });
                     return null; // Stop retrying
                 }
                 const delay = Math.min(times * 100, 2000);
-                console.log(`🔄 Retrying Redis connection attempt ${times} in ${delay}ms...`);
+                logWarn("store.redis_retry", { retries: times, delayMs: delay });
                 return delay;
             },
             connectTimeout: 5000, // Increased timeout
@@ -66,16 +77,46 @@ export async function initRedis(): Promise<void> {
 
         // Prevent unhandled error events from crashing the process
         redis.on("error", (err) => {
-            console.warn("⚠️ Redis connection issue:", err.message);
+            logWarn("store.redis_runtime_error", { error: err });
         });
 
         // Test connection
         await redis.ping();
-        console.log("✅ Redis connected successfully");
-    } catch (error) {
-        console.log("⚠️ Redis not available, using in-memory storage");
+        logInfo("store.redis_connected");
+    } catch {
+        logWarn("store.redis_unavailable", { fallback: "memory" });
         useInMemory = true;
         redis = null;
+    }
+}
+
+export async function getStoreHealth(): Promise<StoreHealth> {
+    const redisConfigured = Boolean(process.env.REDIS_URL);
+
+    if (useInMemory || !redis) {
+        return {
+            mode: "memory",
+            redisConfigured,
+            redisConnected: false,
+            fallbackActive: true,
+        };
+    }
+
+    try {
+        await redis.ping();
+        return {
+            mode: "redis",
+            redisConfigured,
+            redisConnected: true,
+            fallbackActive: false,
+        };
+    } catch {
+        return {
+            mode: "redis",
+            redisConfigured,
+            redisConnected: false,
+            fallbackActive: false,
+        };
     }
 }
 
@@ -100,7 +141,7 @@ export function cleanupStaleRooms(): void {
     }
 
     if (deletedCount > 0) {
-        console.log(`🧹 [InMemory Cleanup] Removed ${deletedCount} stale rooms.`);
+        logInfo("store.memory_cleanup", { deletedCount });
     }
 }
 

@@ -1,76 +1,82 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { Timer, Play, RotateCcw, Trash2, Plus } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 interface VotingTimerProps {
     isHost: boolean;
+    status: "starting" | "voting" | "revealed";
+    timerDuration: number | null;
+    votingEndTime: number | null;
+    onStartTimer: (totalSeconds: number) => void;
+    onAddMinute: () => void;
+    onRestartTimer: () => void;
+    onCancelTimer: () => void;
 }
 
-export default function VotingTimer({ isHost }: VotingTimerProps) {
+export default function VotingTimer({
+    isHost,
+    status,
+    timerDuration,
+    votingEndTime,
+    onStartTimer,
+    onAddMinute,
+    onRestartTimer,
+    onCancelTimer,
+}: VotingTimerProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [minutes, setMinutes] = useState(2);
     const [seconds, setSeconds] = useState(0);
-    const [isRunning, setIsRunning] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(0);
-    const [totalTime, setTotalTime] = useState(0);
-    const intervalRef = useRef<NodeJS.Timeout | null>(null);
+    const [now, setNow] = useState(() => Date.now());
 
-    // Timer logic
     useEffect(() => {
-        if (isRunning && timeLeft > 0) {
-            intervalRef.current = setInterval(() => {
-                setTimeLeft((prev) => {
-                    if (prev <= 1) {
-                        setIsRunning(false);
-                        return 0;
-                    }
-                    return prev - 1;
-                });
-            }, 1000);
+        if (status !== "voting" || !votingEndTime) {
+            return;
         }
 
+        const timer = setInterval(() => {
+            setNow(Date.now());
+        }, 1000);
+
         return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-            }
+            clearInterval(timer);
         };
-    }, [isRunning, timeLeft]);
+    }, [status, votingEndTime]);
+
+    useEffect(() => {
+        setNow(Date.now());
+    }, [status, votingEndTime, timerDuration]);
+
+    const isRunning = status === "voting" && typeof votingEndTime === "number" && votingEndTime > now;
+    const timeLeft = isRunning ? Math.max(0, Math.ceil((votingEndTime - now) / 1000)) : 0;
+    const totalTime = timerDuration && timerDuration > 0 ? timerDuration : timeLeft;
 
     const startTimer = () => {
         const total = minutes * 60 + seconds;
         if (total > 0) {
-            setTotalTime(total);
-            setTimeLeft(total);
-            setIsRunning(true);
+            onStartTimer(total);
             setIsOpen(false);
         }
     };
 
     const addOneMinute = () => {
-        setTimeLeft((prev) => prev + 60);
-        setTotalTime((prev) => prev + 60);
+        onAddMinute();
         setIsOpen(false);
     };
 
     const restartTimer = () => {
-        setTimeLeft(totalTime);
-        setIsRunning(true);
+        onRestartTimer();
         setIsOpen(false);
     };
 
     const cancelTimer = () => {
-        setIsRunning(false);
-        setTimeLeft(0);
-        setTotalTime(0);
+        onCancelTimer();
         setIsOpen(false);
     };
 
     // Calculate progress for circular indicator
     const progress = totalTime > 0 ? timeLeft / totalTime : 0;
-    const circumference = 2 * Math.PI * 18;
-    const strokeDashoffset = circumference * (1 - progress);
 
     if (!isHost) return null;
 
@@ -85,7 +91,7 @@ export default function VotingTimer({ isHost }: VotingTimerProps) {
                     }`}
             >
                 {isRunning ? (
-                    // Circular Progress Indicator (pie chart style, clockwise)
+                    // Circular progress for server-synced countdown
                     <svg width="40" height="40" style={{ transform: 'rotate(-90deg) scaleX(-1)' }}>
                         {/* Background circle (elapsed time - dark) */}
                         <circle

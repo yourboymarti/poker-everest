@@ -2,6 +2,7 @@ export interface Player {
     id: string;
     name: string;
     avatar: string;
+    isHost?: boolean;
 }
 
 export interface Task {
@@ -18,12 +19,11 @@ export interface Task {
 export interface RoomState {
     status: "starting" | "voting" | "revealed";
     gameName: string | null;
-    currentTask: string;
+    currentTask: string | null;
     tasks: Task[];
     votes: Record<string, string>;
     adminId: string | null;
-    adminUserId?: string;
-    players: Record<string, Player & { userId: string; isHost?: boolean }>;
+    players: Record<string, Player>;
     deck?: string[];
     // Timer
     timerDuration?: number | null;

@@ -7,7 +7,7 @@ import { List, ChevronLeft, Play, Plus, X, Trash2, AlertCircle } from "lucide-re
 
 interface TaskSidebarProps {
     tasks: Task[];
-    currentTask: string;
+    currentTask: string | null;
     isAdmin: boolean;
     isOpen: boolean;
     newTaskName: string;
@@ -62,7 +62,7 @@ export default function TaskSidebar({
                 )}
             </AnimatePresence>
 
-            {/* Sidebar - Hidden on mobile */}
+            {/* Sidebar */}
             <motion.div
                 animate={{
                     width: isOpen ? 280 : 0,
@@ -70,7 +70,7 @@ export default function TaskSidebar({
                     opacity: isOpen ? 1 : 0,
                 }}
                 transition={{ type: "tween", duration: 0.2 }}
-                className="hidden md:flex fixed md:relative left-0 top-0 h-full md:h-full bg-slate-800 border-r border-slate-700 flex-col overflow-hidden z-50 md:z-auto"
+                className={`fixed md:relative left-0 top-0 h-full md:h-full bg-slate-800 border-r border-slate-700 flex flex-col overflow-hidden z-50 md:z-auto ${isOpen ? 'flex' : 'hidden md:flex'}`}
             >
                 <div className="p-3 md:p-4 border-b border-slate-700 flex items-center justify-between">
                     <h2 className="font-bold text-white flex items-center gap-2 text-sm md:text-base">

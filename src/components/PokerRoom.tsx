@@ -3,37 +3,42 @@
 import React, { useEffect, useState } from "react";
 import { io, Socket } from "socket.io-client";
 
-
 import { RoomState } from "@/types/room";
 import { TaskSidebar, RoomHeader, PokerTable, VotingCards, ConsensusConfetti } from "./poker";
 
 let socket: Socket;
 
-// Helper to get persistent user ID
-const getPersistentUserId = () => {
-    if (typeof window === 'undefined') return undefined; // Server-side safety
-    let id = localStorage.getItem("poker_user_id");
-    if (!id) {
-        id = "user_" + Math.random().toString(36).substring(2, 15);
-        localStorage.setItem("poker_user_id", id);
-    }
-    return id;
+type DeletedTask = {
+    id: string;
+    name: string;
+    timestamp: number;
+    score?: string;
+    voteDetails?: {
+        playerName: string;
+        vote: string | null;
+    }[];
 };
 
 export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: { roomId: string; userName: string; avatar: string }) {
+    const getRoomHostKey = (targetRoomId: string): string | null => {
+        if (typeof window === "undefined") return null;
+        return localStorage.getItem(`room_host_key_${targetRoomId}`);
+    };
+
     const [roomId, setRoomId] = useState(initialRoomId);
     const [state, setState] = useState<RoomState | null>(null);
     const [myVote, setMyVote] = useState<string | null>(null);
     const [isConnected, setIsConnected] = useState(false);
     const [newTaskName, setNewTaskName] = useState("");
 
-    const [isSidebarOpen, setSidebarOpen] = useState(true);
+    const [isSidebarOpen, setSidebarOpen] = useState(
+        typeof window === "undefined" ? true : window.innerWidth >= 768,
+    );
     const [hasAttemptedRestore, setHasAttemptedRestore] = useState(false);
-    const [lastDeletedTask, setLastDeletedTask] = useState<{ id: string; name: string; timestamp: number; score?: string; voteDetails?: any } | null>(null);
+    const [lastDeletedTask, setLastDeletedTask] = useState<DeletedTask | null>(null);
     const [undoTimeout, setUndoTimeout] = useState<NodeJS.Timeout | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [myId, setMyId] = useState<string | null>(null);
-
 
     useEffect(() => {
         socket = io();
@@ -41,12 +46,9 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
         socket.on("connect", () => {
             setIsConnected(true);
             setMyId(socket.id || null);
-            const isCreator = localStorage.getItem(`room_creator_${roomId}`) === 'true';
-            const userId = getPersistentUserId();
-            socket.emit("join_room_v2", { roomId, userName, avatar, isCreator, userId });
-            if (isCreator) {
-                localStorage.removeItem(`room_creator_${roomId}`);
-            }
+            setError(null);
+            const hostKey = getRoomHostKey(roomId);
+            socket.emit("join_room_v2", { roomId, userName, avatar, hostKey });
         });
 
         socket.on("room_state", (newState: RoomState) => {
@@ -57,8 +59,16 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
         });
 
         socket.on("room_migrated", ({ newRoomId }) => {
+            const currentHostKey = getRoomHostKey(roomId);
+            if (currentHostKey) {
+                localStorage.setItem(`room_host_key_${newRoomId}`, currentHostKey);
+            }
             setRoomId(newRoomId);
             window.history.replaceState(null, "", `?room=${newRoomId}`);
+        });
+
+        socket.on("room_not_found", ({ roomId: unknownRoomId }) => {
+            setError(`Комната ${unknownRoomId} не найдена`);
         });
 
         socket.on("room_full", ({ maxPlayers }) => {
@@ -67,6 +77,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
         return () => {
             socket.disconnect();
+            setIsConnected(false);
         };
     }, [roomId, userName, avatar]);
 
@@ -103,7 +114,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
             }
             setHasAttemptedRestore(true);
         }
-    }, [isConnected, state?.tasks.length, state?.adminId, roomId, hasAttemptedRestore]);
+    }, [isConnected, state, roomId, hasAttemptedRestore]);
 
     // Actions
     const castVote = (card: string) => {
@@ -166,6 +177,22 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
         socket.emit("start_voting", { roomId, taskId });
     };
 
+    const startTimer = (totalSeconds: number) => {
+        socket.emit("update_timer", { roomId, action: "start", seconds: totalSeconds });
+    };
+
+    const addTimerMinute = () => {
+        socket.emit("update_timer", { roomId, action: "add_minute" });
+    };
+
+    const restartTimer = () => {
+        socket.emit("update_timer", { roomId, action: "restart" });
+    };
+
+    const cancelTimer = () => {
+        socket.emit("update_timer", { roomId, action: "cancel" });
+    };
+
     const copyLink = () => {
         navigator.clipboard.writeText(window.location.origin + "?room=" + roomId);
     };
@@ -190,7 +217,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
     // Derived state
     const activeDeck = state.deck || ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "?", "☕"];
-    const isAdmin = state.adminUserId === getPersistentUserId();
+    const isAdmin = Boolean(myId) && state.adminId === myId;
     const playersList = Object.values(state.players);
     const votedCount = Object.keys(state.votes).length;
     const totalPlayers = playersList.length;
@@ -232,13 +259,18 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     status={state.status}
                     votedCount={votedCount}
                     totalPlayers={totalPlayers}
-                    players={playersList}
                     currentUser={currentUser}
                     isSidebarOpen={isSidebarOpen}
                     onOpenSidebar={() => setSidebarOpen(true)}
                     onCopyLink={copyLink}
-                    onClaimHost={() => socket.emit("claim_host", { roomId, userId: getPersistentUserId() })}
+                    onClaimHost={() => socket.emit("claim_host", { roomId, hostKey: getRoomHostKey(roomId) })}
                     isHost={isAdmin}
+                    timerDuration={state.timerDuration ?? null}
+                    votingEndTime={state.votingEndTime ?? null}
+                    onStartTimer={startTimer}
+                    onAddMinute={addTimerMinute}
+                    onRestartTimer={restartTimer}
+                    onCancelTimer={cancelTimer}
                 />
 
                 {/* Poker Table */}
@@ -275,7 +307,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     <div className="bg-slate-800 border border-indigo-500/50 rounded-xl p-4 shadow-2xl flex items-center gap-4 backdrop-blur-md">
                         <div className="flex flex-col">
                             <span className="text-sm font-medium text-slate-200">Задача удалена</span>
-                            <span className="text-xs text-slate-400 max-w-[150px] truncate">"{lastDeletedTask.name}"</span>
+                            <span className="text-xs text-slate-400 max-w-[150px] truncate">{lastDeletedTask.name}</span>
                         </div>
                         <button
                             onClick={undoDelete}
