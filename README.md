@@ -36,7 +36,7 @@ Designed for agile teams to estimate tasks with style.
 
 ### Prerequisites
 
-*   Node.js 18+
+*   Node.js 22.x
 *   npm or yarn
 *   Redis for production/Vercel deployments
 
@@ -67,12 +67,25 @@ This project is now aligned with the standard Next.js deployment model and can b
 
 **Vercel requirements**
 *   Set `REDIS_URL` in the project environment variables. On Vercel this is required because in-memory room state is not reliable across serverless invocations.
+*   Optional: set `SENTRY_DSN` for runtime error tracking.
+*   Optional: set `SENTRY_TRACES_SAMPLE_RATE` (for example `0.1`) if you want tracing enabled.
 *   Build command: `npm run build`
 *   Install command: `npm install`
+*   Node.js version: `22.x`
 
 **Runtime model**
 *   Room actions run through Next.js Route Handlers.
 *   Clients poll for room updates, which avoids long-lived WebSocket servers and fits Vercel serverless execution.
+
+**Minimal Vercel checklist**
+1.  Import the GitHub repository into Vercel.
+2.  If you want production deploys from the current branch, set the Production Branch to `dev` in the Vercel project settings. Otherwise merge `dev` into your production branch first.
+3.  Add `REDIS_URL` to `Production`. Add it to `Preview` too if you want room logic to work on preview deployments.
+4.  Add `SENTRY_DSN` and `SENTRY_TRACES_SAMPLE_RATE` only if you use Sentry.
+5.  Trigger a deploy and verify:
+    *   `/healthz` returns `200`
+    *   `/readyz` returns `200`
+    *   room creation/join/reaction flow works across two browser tabs
 
 ## 📈 Observability
 
