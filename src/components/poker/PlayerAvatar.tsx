@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Check, Clock } from "lucide-react";
-import { Player } from "@/types/room";
+import { Player, RoomReaction } from "@/types/room";
 
 const REACTION_EMOJIS = ["🎯", "🚀", "💩", "❤️"];
 
@@ -15,13 +15,20 @@ interface PlayerAvatarProps {
     isVoting: boolean;
     isRevealed: boolean;
     position: { x: number; y: number };
-    showInfo: boolean;
-    receivedReaction?: { emoji: string; id: number } | null;
+    reactions?: RoomReaction[];
+    layoutMode?: "absolute" | "grid";
     onSendReaction: (emoji: string) => void;
     onMouseEnter: () => void;
     onMouseLeave: () => void;
 }
 
+function hashValue(value: string): number {
+    let hash = 0;
+    for (let index = 0; index < value.length; index += 1) {
+        hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+}
 
 export default function PlayerAvatar({
     player,
@@ -31,8 +38,8 @@ export default function PlayerAvatar({
     isVoting,
     isRevealed,
     position,
-    showInfo,
-    receivedReaction,
+    reactions = [],
+    layoutMode = "absolute",
     onSendReaction,
     onMouseEnter,
     onMouseLeave
@@ -41,7 +48,19 @@ export default function PlayerAvatar({
     const [isChanged, setIsChanged] = useState(false);
     const [hasChangedMind, setHasChangedMind] = useState(false);
     const [showReactionButtons, setShowReactionButtons] = useState(false);
-    const [flyingEmojis, setFlyingEmojis] = useState<{ id: number; emoji: string; side: number; seed: number }[]>([]);
+    const [flyingEmojis, setFlyingEmojis] = useState<{
+        id: string;
+        emoji: string;
+        side: number;
+        seed: number;
+        drift: number;
+        arcHeight: number;
+        duration: number;
+        spin: number;
+        launchDistance: number;
+        impactScale: number;
+    }[]>([]);
+    const seenReactionIds = useRef<Set<string>>(new Set());
 
     useEffect(() => {
         if (!hasVoted) {
@@ -56,25 +75,46 @@ export default function PlayerAvatar({
         prevVote.current = vote;
     }, [vote, hasVoted]);
 
-    // Show received reaction animation
     useEffect(() => {
-        if (receivedReaction) {
+        const pendingReactions = reactions.filter((reaction) => !seenReactionIds.current.has(reaction.id));
+        if (pendingReactions.length === 0) {
+            return;
+        }
+
+        const timers: number[] = [];
+
+        for (const reaction of pendingReactions) {
+            seenReactionIds.current.add(reaction.id);
+
+            const reactionHash = hashValue(`${reaction.senderId}:${reaction.id}`);
+            const side = reactionHash % 2 === 0 ? -1 : 1;
             const newEmoji = {
-                id: receivedReaction.id, // Use the ID from server/table (unique per click)
-                emoji: receivedReaction.emoji,
-                side: Math.random() > 0.5 ? -700 : 700, // Start from further away
-                seed: Math.random() * 20 - 10 // Random Y offset for variation
+                id: reaction.id,
+                emoji: reaction.emoji,
+                side,
+                seed: (reactionHash % 18) - 9,
+                drift: 12 + (reactionHash % 32),
+                arcHeight: 24 + (reactionHash % 30),
+                duration: 1.9 + ((reactionHash % 7) * 0.08),
+                spin: 90 + (reactionHash % 220),
+                launchDistance: layoutMode === "grid" ? 110 + (reactionHash % 40) : 170 + (reactionHash % 90),
+                impactScale: 0.95 + ((reactionHash % 20) / 100),
             };
 
             setFlyingEmojis((prev) => [...prev, newEmoji]);
 
-            // Remove after animation completes (5s)
-            const timer = setTimeout(() => {
-                setFlyingEmojis((prev) => prev.filter(e => e.id !== newEmoji.id));
-            }, 5000);
-            return () => clearTimeout(timer);
+            const timer = window.setTimeout(() => {
+                setFlyingEmojis((prev) => prev.filter((emoji) => emoji.id !== newEmoji.id));
+            }, newEmoji.duration * 1000 + 500);
+            timers.push(timer);
         }
-    }, [receivedReaction]);
+
+        return () => {
+            for (const timer of timers) {
+                window.clearTimeout(timer);
+            }
+        };
+    }, [layoutMode, reactions]);
 
 
     const handleSendReaction = (emoji: string) => {
@@ -82,12 +122,20 @@ export default function PlayerAvatar({
         // setShowReactionButtons(false); // Keep open for spamming!
     };
 
+    const isGrid = layoutMode === "grid";
+
     return (
         <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1, x: position.x, y: position.y }}
-            className="absolute flex items-center gap-2 scale-65 sm:scale-75 md:scale-90 group z-10 hover:z-20"
-            style={{ marginLeft: 0, marginTop: 0 }}
+            initial={isGrid ? { opacity: 0, scale: 0.8 } : { opacity: 0, scale: 0.8 }}
+            animate={isGrid
+                ? { opacity: 1, scale: 1 }
+                : { opacity: 1, scale: 1, x: position.x, y: position.y }
+            }
+            className={isGrid
+                ? "flex flex-col items-center gap-2 relative p-2"
+                : "absolute flex items-center gap-2 scale-65 sm:scale-75 md:scale-90 group z-10 hover:z-20"
+            }
+            style={isGrid ? {} : { marginLeft: 0, marginTop: 0 }}
             onMouseEnter={() => {
                 onMouseEnter();
                 setShowReactionButtons(true);
@@ -132,23 +180,46 @@ export default function PlayerAvatar({
                     {flyingEmojis.map((item) => (
                         <motion.div
                             key={item.id}
-                            initial={{ opacity: 0, scale: 0.5, x: item.side, y: item.seed }}
+                            initial={{
+                                opacity: 0,
+                                scale: 0.35,
+                                x: item.side * item.launchDistance,
+                                y: item.seed + 42,
+                                rotate: 0,
+                            }}
                             animate={{
                                 opacity: [0, 1, 1, 0],
-                                scale: [0.5, 1.2, 1, 0.8],
-                                x: [item.side, 0, 0, 0],
-                                y: [item.seed, -20, -10, 80], // Hit above center (-20), slight bounce (-10), then fall (80)
-                                rotate: [0, item.side > 0 ? -180 : 180, item.side > 0 ? -200 : 200, item.side > 0 ? -220 : 220]
+                                scale: [0.35, 1.15, item.impactScale, 0.82],
+                                x: [item.side * item.launchDistance, item.side * item.drift, 0, item.side * 10],
+                                y: [item.seed + 42, item.seed - item.arcHeight, item.seed - 8, 70],
+                                rotate: [0, item.side * item.spin * 0.65, item.side * item.spin, item.side * (item.spin + 40)],
                             }}
                             transition={{
-                                duration: 5,
-                                times: [0, 0.3, 0.5, 1], // Fast throw (0.3s), brief hover/bounce (0.2s), then fall
-                                ease: ["circOut", "easeInOut", "circIn"] // Decelerate on hit, float, accelerate down
+                                duration: item.duration,
+                                times: [0, 0.45, 0.62, 1],
+                                ease: ["circOut", "easeInOut", "circIn"],
                             }}
-                            className="absolute top-0 left-1/2 -ml-3 text-2xl z-40 pointer-events-none"
+                            className="absolute top-0 left-1/2 -ml-3 text-2xl z-40 pointer-events-none drop-shadow-[0_0_12px_rgba(255,255,255,0.45)]"
                         >
                             {item.emoji}
                         </motion.div>
+                    ))}
+                    {flyingEmojis.map((item) => (
+                        <motion.div
+                            key={`${item.id}-impact`}
+                            initial={{ opacity: 0, scale: 0.3, y: -4 }}
+                            animate={{
+                                opacity: [0, 0, 0.4, 0],
+                                scale: [0.3, 0.3, 1.2, 1.8],
+                                y: [-4, -4, -10, -16],
+                            }}
+                            transition={{
+                                duration: item.duration,
+                                times: [0, 0.48, 0.62, 1],
+                                ease: "easeOut",
+                            }}
+                            className="absolute top-0 left-1/2 -ml-4 h-8 w-8 rounded-full border border-cyan-200/50 bg-cyan-100/10 z-30 pointer-events-none"
+                        />
                     ))}
                 </AnimatePresence>
 
@@ -166,8 +237,7 @@ export default function PlayerAvatar({
                         </div>
                     )}
                 </div>
-                {/* Player Name - Visible if showInfo is true */}
-                <div className={`absolute -bottom-6 bg-slate-900/90 px-2 py-0.5 rounded text-[10px] md:text-xs text-white border border-slate-700 whitespace-nowrap backdrop-blur-sm max-w-[100px] truncate text-center transition-opacity duration-200 pointer-events-none z-20 shadow-xl ${showInfo ? 'opacity-100' : 'opacity-0'}`}>
+                <div className="absolute -bottom-7 min-w-[68px] max-w-[120px] rounded-md border border-slate-700 bg-slate-900/90 px-2 py-1 text-center text-[10px] leading-3 text-white whitespace-normal break-words backdrop-blur-sm shadow-xl pointer-events-none z-20">
                     {player.name}
                 </div>
             </div>

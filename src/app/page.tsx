@@ -3,10 +3,12 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import PokerRoom from "@/components/PokerRoom";
-import { AVATARS } from "@/components/AvatarSelector";
+import { ApiError } from "@/lib/api";
+import { getRoomHostKey, getRoomSession, setRoomHostKey } from "@/lib/clientSession";
+import { createRoomRequest } from "@/lib/roomApi";
 import { MountainSnow, ArrowRight, Plus } from "lucide-react";
 import { motion } from "framer-motion";
-import { io } from "socket.io-client";
+import { pickRandomAvatar } from "../../shared/avatars";
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -18,51 +20,65 @@ function HomeContent() {
 
   // Join Mode State
   const [userName, setUserName] = useState("");
-  const [avatar, setAvatar] = useState(AVATARS[0]);
+  const [avatar, setAvatar] = useState("🧗");
 
   // Create Mode State
   const [gameName, setGameName] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   useEffect(() => {
     const r = searchParams.get("room");
+    const savedName = localStorage.getItem("poker_player_name");
+    const savedAvatar = localStorage.getItem("poker_player_avatar");
+
     if (r) {
       setRoomParam(r);
+      const roomSession = getRoomSession(r);
+      const sessionName = roomSession?.userName || savedName;
+      const sessionAvatar = roomSession?.avatar || savedAvatar || pickRandomAvatar();
+      const canResumeSession =
+        Boolean(roomSession?.userName) ||
+        Boolean(getRoomHostKey(r) && savedName) ||
+        localStorage.getItem(`poker_joined_${r}`) === "true";
 
-      // Check if we were already in this room
-      const hasJoined = localStorage.getItem(`poker_joined_${r}`);
-      const savedName = localStorage.getItem("poker_player_name");
-      const savedAvatar = localStorage.getItem("poker_player_avatar");
+      if (sessionName) {
+        setUserName(sessionName);
+      }
+      setAvatar(sessionAvatar);
 
-      if (hasJoined === 'true' && savedName) {
-        setUserName(savedName);
-        if (savedAvatar) setAvatar(savedAvatar);
+      if (canResumeSession && sessionName) {
         setJoined(true);
+      } else {
+        setJoined(false);
       }
     } else {
-      // Randomize avatar on client mount only if not auto-joining
-      setAvatar(AVATARS[Math.floor(Math.random() * AVATARS.length)]);
+      setRoomParam(null);
+      setJoined(false);
+      setAvatar(savedAvatar || pickRandomAvatar());
     }
 
-    // Load saved name for convenience even if not auto-joining
-    const savedName = localStorage.getItem("poker_player_name");
-    if (savedName) setUserName(savedName);
+    if (savedName) {
+      setUserName(savedName);
+    }
   }, [searchParams]);
 
-  const handleCreateGame = (e: React.FormEvent) => {
+  const handleCreateGame = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!gameName.trim()) return; // Game name is required
     setIsCreating(true);
+    setCreateError(null);
 
-    const socket = io();
-    socket.emit("create_room", { gameName });
-    socket.on("room_created", ({ roomId, hostKey }) => {
-      socket.disconnect();
+    try {
+      const { roomId, hostKey } = await createRoomRequest(gameName.trim());
       if (typeof hostKey === "string" && hostKey.length > 0) {
-        localStorage.setItem(`room_host_key_${roomId}`, hostKey);
+        setRoomHostKey(roomId, hostKey);
       }
       router.push(`/?room=${roomId}`);
-    });
+    } catch (error) {
+      setCreateError(error instanceof ApiError ? error.message : "Failed to create room");
+      setIsCreating(false);
+    }
   };
 
   const handleJoinGame = (e: React.FormEvent) => {
@@ -156,13 +172,19 @@ function HomeContent() {
               </p>
             </div>
 
+            {createError && (
+              <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+                {createError}
+              </div>
+            )}
+
             <div className="pt-2">
               <button
                 type="submit"
                 disabled={isCreating}
                 className="w-full bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-cyan-900/20 disabled:opacity-50 disabled:cursor-wait transition-all transform hover:-translate-y-0.5 active:translate-y-0 flex items-center justify-center gap-2"
               >
-                {isCreating ? "Creating Base Camp..." : <><Plus size={20} /> Start Game</>}
+                  {isCreating ? "Creating Base Camp..." : <><Plus size={20} /> Start Game</>}
               </button>
             </div>
           </form>

@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import { leaveRoom } from "server/roomService";
+import { isPersistentStoreMisconfigured } from "server/roomStore";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+function json(body: unknown, status = 200): NextResponse {
+    return NextResponse.json(body, {
+        status,
+        headers: {
+            "cache-control": "no-store, max-age=0",
+        },
+    });
+}
+
+export async function POST(
+    request: Request,
+    context: { params: Promise<{ roomId: string }> },
+): Promise<NextResponse> {
+    if (isPersistentStoreMisconfigured()) {
+        return json(
+            {
+                code: "store_unavailable",
+                message: "Для деплоя на Vercel нужен REDIS_URL. In-memory storage в serverless режиме не поддерживается.",
+            },
+            503,
+        );
+    }
+
+    const { roomId } = await context.params;
+    const body = (await request.json().catch(() => ({}))) as { playerId?: string };
+
+    if (!body.playerId) {
+        return json({ code: "invalid_action", message: "playerId обязателен" }, 400);
+    }
+
+    await leaveRoom(roomId, body.playerId);
+    return json({ ok: true });
+}

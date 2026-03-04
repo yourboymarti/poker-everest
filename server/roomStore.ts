@@ -1,7 +1,22 @@
 import Redis from "ioredis";
 import { logInfo, logWarn } from "./logger";
 
-// Room type definition
+export interface RoomPlayer {
+    id: string;
+    name: string;
+    avatar: string;
+    isHost?: boolean;
+    lastSeenAt: number;
+}
+
+export interface RoomReaction {
+    id: string;
+    playerId: string;
+    senderId: string;
+    emoji: string;
+    createdAt: number;
+}
+
 export interface Room {
     status: "starting" | "voting" | "revealed";
     gameName: string | null;
@@ -17,20 +32,20 @@ export interface Room {
         }[];
     }[];
     votes: Record<string, string>;
-    adminId: string;
+    adminId: string | null;
     adminKey: string; // Secret key used to recover host privileges
-    players: Record<string, { id: string; name: string; avatar: string; isHost?: boolean }>;
+    players: Record<string, RoomPlayer>;
     deck: string[];
-    // Timer
-    timerDuration: number | null; // seconds, null = no timer
-    votingEndTime: number | null; // timestamp when voting ends
-    createdAt: number; // Timestamp when room was created
+    timerDuration: number | null;
+    votingEndTime: number | null;
+    reactions: RoomReaction[];
+    createdAt: number;
 }
 
-// Try to connect to Redis, fallback to in-memory if not available
 let redis: Redis | null = null;
 let useInMemory = false;
 const inMemoryRooms: Record<string, Room> = {};
+let initPromise: Promise<void> | null = null;
 
 const ROOM_PREFIX = "poker:room:";
 const ROOM_TTL = 60 * 60 * 24; // 24 hours
@@ -42,6 +57,14 @@ export interface StoreHealth {
     fallbackActive: boolean;
 }
 
+export function isPersistentStoreRequired(): boolean {
+    return Boolean(process.env.VERCEL);
+}
+
+export function isPersistentStoreMisconfigured(): boolean {
+    return isPersistentStoreRequired() && !process.env.REDIS_URL;
+}
+
 export async function initRedis(): Promise<void> {
     const redisUrl = process.env.REDIS_URL;
 
@@ -49,6 +72,7 @@ export async function initRedis(): Promise<void> {
         logWarn("store.redis_url_missing", {
             fallback: "memory",
             nodeEnv: process.env.NODE_ENV,
+            vercel: process.env.VERCEL || null,
         });
         useInMemory = true;
         return;
@@ -90,7 +114,22 @@ export async function initRedis(): Promise<void> {
     }
 }
 
+async function ensureStoreReady(): Promise<void> {
+    if (redis || useInMemory) {
+        return;
+    }
+
+    if (!initPromise) {
+        initPromise = initRedis().finally(() => {
+            initPromise = null;
+        });
+    }
+
+    await initPromise;
+}
+
 export async function getStoreHealth(): Promise<StoreHealth> {
+    await ensureStoreReady();
     const redisConfigured = Boolean(process.env.REDIS_URL);
 
     if (useInMemory || !redis) {
@@ -146,6 +185,8 @@ export function cleanupStaleRooms(): void {
 }
 
 export async function getRoom(roomId: string): Promise<Room | null> {
+    await ensureStoreReady();
+
     if (useInMemory) {
         return inMemoryRooms[roomId] || null;
     }
@@ -159,6 +200,8 @@ export async function getRoom(roomId: string): Promise<Room | null> {
 }
 
 export async function setRoom(roomId: string, room: Room): Promise<void> {
+    await ensureStoreReady();
+
     if (useInMemory) {
         inMemoryRooms[roomId] = room;
         return;
@@ -172,6 +215,8 @@ export async function setRoom(roomId: string, room: Room): Promise<void> {
 }
 
 export async function deleteRoom(roomId: string): Promise<void> {
+    await ensureStoreReady();
+
     if (useInMemory) {
         delete inMemoryRooms[roomId];
         return;
@@ -185,6 +230,8 @@ export async function deleteRoom(roomId: string): Promise<void> {
 }
 
 export async function getAllRoomIds(): Promise<string[]> {
+    await ensureStoreReady();
+
     if (useInMemory) {
         return Object.keys(inMemoryRooms);
     }

@@ -4,12 +4,9 @@
 import React from "react";
 import clsx from "clsx";
 import { motion } from "framer-motion";
+import { PLAYER_AVATARS } from "../../shared/avatars";
 
-export const AVATARS = [
-    "👽", "🤖", "👨‍🚀", "👾", "🛸", "👻", "🧟", "🧛",
-    "🧙", "🐉", "🦄", "👺", "👹", "🐲", "🦍", "🐺",
-    "🦊", "🦅", "🦉", "🦈", "🦖", "🐙", "🐅", "🦁"
-];
+export const AVATARS = PLAYER_AVATARS;
 
 interface AvatarSelectorProps {
     selectedAvatar: string;

@@ -1,13 +1,13 @@
 # 🏔️ Poker Everest
 
-A modern, real-time Planning Poker application built with Next.js, Socket.IO, and Tailwind CSS.
+A modern Planning Poker application built with Next.js, Redis, and Tailwind CSS.
 Designed for agile teams to estimate tasks with style.
 
 ![Poker Everest](/public/opengraph-image.png)
 
 ## ✨ Features
 
-*   **Real-time Interaction**: Instant voting and revealing using WebSockets.
+*   **Live Room Sync**: Fast room updates via server actions and short polling, compatible with Vercel.
 *   **Interactive Reactions**:
     *   Throw emojis (🎯 🍻 💩 ❤️) at other players with fun physics! 🚀
     *   Shake your beer glass by clicking on it 🍺.
@@ -27,8 +27,8 @@ Designed for agile teams to estimate tasks with style.
 ## 🛠️ Tech Stack
 
 *   **Frontend**: Next.js 15 (App Router), React 19, Tailwind CSS v4, Framer Motion.
-*   **Backend**: Custom Node.js server (server.ts) with Socket.IO.
-*   **State Management**: Redis (optional, with in-memory fallback).
+*   **Backend**: Next.js Route Handlers running on the Node.js runtime.
+*   **State Management**: Redis for shared room state on Vercel. Local development can fall back to in-memory storage.
 *   **Icons**: Lucide React.
 *   **Styling**: Glassmorphism, mobile-responsive design.
 
@@ -38,6 +38,7 @@ Designed for agile teams to estimate tasks with style.
 
 *   Node.js 18+
 *   npm or yarn
+*   Redis for production/Vercel deployments
 
 ### Installation
 
@@ -62,20 +63,23 @@ Designed for agile teams to estimate tasks with style.
 
 ## 📦 Deployment
 
-Since this application uses a custom Node.js server for WebSockets, it **cannot** be hosted on static platforms like Vercel (standard) or GitHub Pages.
+This project is now aligned with the standard Next.js deployment model and can be deployed directly to Vercel.
 
-**Recommended Hosting:**
-*   **Railway** (Zero config, detects server.ts)
-*   **Render** (Web Service)
-*   **VPS** (DigitalOcean, Hetzner) with Docker/PM2.
+**Vercel requirements**
+*   Set `REDIS_URL` in the project environment variables. On Vercel this is required because in-memory room state is not reliable across serverless invocations.
+*   Build command: `npm run build`
+*   Install command: `npm install`
+
+**Runtime model**
+*   Room actions run through Next.js Route Handlers.
+*   Clients poll for room updates, which avoids long-lived WebSocket servers and fits Vercel serverless execution.
 
 ## 📈 Observability
 
-The server exposes operational endpoints:
+The app exposes operational endpoints:
 
 *   `GET /healthz` — liveness.
 *   `GET /readyz` — readiness + storage mode state.
-*   `GET /metrics` — Prometheus-compatible app metrics.
 *   Sentry (optional): set `SENTRY_DSN` (+ optional `SENTRY_TRACES_SAMPLE_RATE`) for runtime error tracking.
 
 For SLO targets, alerts and runbook, see `OPERATIONS.md`.

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { clearRoomSession } from "@/lib/clientSession";
 import { Player } from "@/types/room";
 import { List, MountainSnow, Copy, Check, LogOut, Link, Crown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -60,7 +61,7 @@ export default function RoomHeader({
         const params = new URLSearchParams(window.location.search);
         const roomId = params.get("room");
         if (roomId) {
-            localStorage.removeItem(`poker_joined_${roomId}`);
+            clearRoomSession(roomId);
         }
 
         // Reload page to return to entry screen

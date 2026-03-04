@@ -1,12 +1,18 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { io, Socket } from "socket.io-client";
+import React, { useCallback, useEffect, useState } from "react";
 
+import { ApiError } from "@/lib/api";
+import {
+    getOrCreatePlayerId,
+    getRoomHostKey,
+    getRoomSession,
+    setRoomHostKey,
+    setRoomSession,
+} from "@/lib/clientSession";
+import { getRoomRequest, joinRoomRequest, roomActionRequest } from "@/lib/roomApi";
 import { RoomState } from "@/types/room";
 import { TaskSidebar, RoomHeader, PokerTable, VotingCards, ConsensusConfetti } from "./poker";
-
-let socket: Socket;
 
 type DeletedTask = {
     id: string;
@@ -19,16 +25,24 @@ type DeletedTask = {
     }[];
 };
 
-export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: { roomId: string; userName: string; avatar: string }) {
-    const getRoomHostKey = (targetRoomId: string): string | null => {
-        if (typeof window === "undefined") return null;
-        return localStorage.getItem(`room_host_key_${targetRoomId}`);
-    };
+const POLL_INTERVAL_MS = 1500;
 
+function getErrorMessage(unknownError: unknown, fallback: string): string {
+    if (unknownError instanceof ApiError && unknownError.message) {
+        return unknownError.message;
+    }
+    if (unknownError instanceof Error && unknownError.message) {
+        return unknownError.message;
+    }
+    return fallback;
+}
+
+export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: { roomId: string; userName: string; avatar: string }) {
     const [roomId, setRoomId] = useState(initialRoomId);
+    const [playerId, setPlayerId] = useState<string | null>(null);
     const [state, setState] = useState<RoomState | null>(null);
     const [myVote, setMyVote] = useState<string | null>(null);
-    const [isConnected, setIsConnected] = useState(false);
+    const [isLoading, setIsLoading] = useState(true);
     const [newTaskName, setNewTaskName] = useState("");
 
     const [isSidebarOpen, setSidebarOpen] = useState(
@@ -38,48 +52,151 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
     const [lastDeletedTask, setLastDeletedTask] = useState<DeletedTask | null>(null);
     const [undoTimeout, setUndoTimeout] = useState<NodeJS.Timeout | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [myId, setMyId] = useState<string | null>(null);
+    const [actionError, setActionError] = useState<string | null>(null);
 
     useEffect(() => {
-        socket = io();
+        const existingRoomSession = getRoomSession(initialRoomId);
+        setPlayerId(existingRoomSession?.playerId || getOrCreatePlayerId());
+    }, [initialRoomId]);
 
-        socket.on("connect", () => {
-            setIsConnected(true);
-            setMyId(socket.id || null);
-            setError(null);
-            const hostKey = getRoomHostKey(roomId);
-            socket.emit("join_room_v2", { roomId, userName, avatar, hostKey });
-        });
+    const applyRoomState = useCallback((nextState: RoomState) => {
+        setState(nextState);
+        setError(null);
+        setActionError(null);
 
-        socket.on("room_state", (newState: RoomState) => {
-            setState(newState);
-            if (newState.status === "voting" && newState.votes && socket.id && !newState.votes[socket.id]) {
-                setMyVote(null);
+        if (playerId && nextState.status === "voting" && !nextState.votes[playerId]) {
+            setMyVote(null);
+        }
+    }, [playerId]);
+
+    const refreshRoom = useCallback(async () => {
+        if (!playerId) {
+            return;
+        }
+
+        try {
+            const nextState = await getRoomRequest(roomId, playerId);
+            applyRoomState(nextState);
+        } catch (unknownError) {
+            if (unknownError instanceof ApiError && unknownError.code === "room_not_found") {
+                setError(`Комната ${roomId} не найдена`);
+                return;
             }
-        });
 
-        socket.on("room_migrated", ({ newRoomId }) => {
-            const currentHostKey = getRoomHostKey(roomId);
-            if (currentHostKey) {
-                localStorage.setItem(`room_host_key_${newRoomId}`, currentHostKey);
+            if (!state) {
+                setError(getErrorMessage(unknownError, "Не удалось загрузить комнату"));
+                return;
             }
-            setRoomId(newRoomId);
-            window.history.replaceState(null, "", `?room=${newRoomId}`);
-        });
 
-        socket.on("room_not_found", ({ roomId: unknownRoomId }) => {
-            setError(`Комната ${unknownRoomId} не найдена`);
-        });
+            setActionError(getErrorMessage(unknownError, "Не удалось обновить состояние комнаты"));
+        }
+    }, [applyRoomState, playerId, roomId, state]);
 
-        socket.on("room_full", ({ maxPlayers }) => {
-            setError(`Комната заполнена (максимум ${maxPlayers} участников)`);
-        });
+    const runRoomAction = useCallback(async (payload: Record<string, unknown>) => {
+        if (!playerId) {
+            return null;
+        }
+
+        try {
+            const response = await roomActionRequest(roomId, playerId, payload);
+
+            if (response.newRoomId && response.newRoomId !== roomId) {
+                const currentHostKey = getRoomHostKey(roomId);
+                if (currentHostKey) {
+                    setRoomHostKey(response.newRoomId, currentHostKey);
+                }
+                const existingRoomSession = getRoomSession(roomId);
+                if (existingRoomSession) {
+                    setRoomSession(response.newRoomId, {
+                        ...existingRoomSession,
+                        updatedAt: Date.now(),
+                    });
+                }
+                setRoomId(response.newRoomId);
+                window.history.replaceState(null, "", `?room=${response.newRoomId}`);
+            }
+
+            applyRoomState(response.room);
+            return response.room;
+        } catch (unknownError) {
+            setActionError(getErrorMessage(unknownError, "Не удалось выполнить действие"));
+            return null;
+        }
+    }, [applyRoomState, playerId, roomId]);
+
+    useEffect(() => {
+        if (!playerId) {
+            return;
+        }
+
+        let cancelled = false;
+
+        setIsLoading(true);
+        setState(null);
+        setMyVote(null);
+        setError(null);
+        setActionError(null);
+        setHasAttemptedRestore(false);
+
+        joinRoomRequest(roomId, playerId, userName, avatar, getRoomHostKey(roomId))
+            .then((room) => {
+                if (cancelled) {
+                    return;
+                }
+
+                applyRoomState(room);
+            })
+            .catch((unknownError) => {
+                if (cancelled) {
+                    return;
+                }
+
+                setError(getErrorMessage(unknownError, "Не удалось присоединиться к комнате"));
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setIsLoading(false);
+                }
+            });
 
         return () => {
-            socket.disconnect();
-            setIsConnected(false);
+            cancelled = true;
         };
-    }, [roomId, userName, avatar]);
+    }, [roomId, userName, avatar, playerId, applyRoomState]);
+
+    useEffect(() => {
+        if (!playerId || !state) {
+            return;
+        }
+
+        const currentUser = state.players[playerId];
+        if (!currentUser) {
+            return;
+        }
+
+        localStorage.setItem("poker_player_name", currentUser.name);
+        localStorage.setItem("poker_player_avatar", currentUser.avatar);
+        setRoomSession(roomId, {
+            playerId,
+            userName: currentUser.name,
+            avatar: currentUser.avatar,
+            updatedAt: Date.now(),
+        });
+    }, [playerId, roomId, state]);
+
+    useEffect(() => {
+        if (!playerId || error) {
+            return;
+        }
+
+        const timer = window.setInterval(() => {
+            void refreshRoom();
+        }, POLL_INTERVAL_MS);
+
+        return () => {
+            window.clearInterval(timer);
+        };
+    }, [playerId, roomId, error, refreshRoom]);
 
     // Persistence: Save/Clear tasks in localStorage
     useEffect(() => {
@@ -96,8 +213,8 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
     // Persistence: Restore tasks if room is empty and user is admin
     useEffect(() => {
-        const isAdmin = state?.adminId === socket?.id;
-        if (isConnected && state && !hasAttemptedRestore && isAdmin) {
+        const isAdmin = state?.adminId === playerId;
+        if (playerId && state && !hasAttemptedRestore && isAdmin) {
             if (state.tasks.length === 0) {
                 const savedTasks = localStorage.getItem(`poker_tasks_${roomId}`);
                 if (savedTasks) {
@@ -105,7 +222,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                         const tasks = JSON.parse(savedTasks);
                         if (Array.isArray(tasks) && tasks.length > 0) {
                             console.log("Restoring tasks from backup...", tasks.length);
-                            socket.emit("restore_tasks", { roomId, tasks });
+                            void runRoomAction({ type: "restore_tasks", tasks });
                         }
                     } catch (e) {
                         console.error("Failed to parse saved tasks", e);
@@ -114,25 +231,25 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
             }
             setHasAttemptedRestore(true);
         }
-    }, [isConnected, state, roomId, hasAttemptedRestore]);
+    }, [playerId, state, roomId, hasAttemptedRestore, runRoomAction]);
 
     // Actions
     const castVote = (card: string) => {
         // Allow voting in both "voting" and "revealed" states (for post-reveal discussions)
         if (state?.status === "voting" || state?.status === "revealed") {
             setMyVote(card);
-            socket.emit("vote", { roomId, value: card });
+            void runRoomAction({ type: "vote", value: card });
         }
     };
 
-    const revealVotes = () => socket.emit("reveal", { roomId });
-    const resetRound = () => socket.emit("reset_round", { roomId });
-    const endRound = () => socket.emit("end_round", { roomId });
+    const revealVotes = () => void runRoomAction({ type: "reveal" });
+    const resetRound = () => void runRoomAction({ type: "reset_round" });
+    const endRound = () => void runRoomAction({ type: "end_round" });
 
     const addTask = (e: React.FormEvent) => {
         e.preventDefault();
         if (newTaskName.trim()) {
-            socket.emit("add_task", { roomId, taskName: newTaskName });
+            void runRoomAction({ type: "add_task", taskName: newTaskName });
             setNewTaskName("");
         }
     };
@@ -153,14 +270,14 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
             setUndoTimeout(timeout);
         }
 
-        socket.emit("delete_task", { roomId, taskId });
+        void runRoomAction({ type: "delete_task", taskId });
     };
 
     const undoDelete = () => {
         if (lastDeletedTask) {
             console.log("Undoing delete for task:", lastDeletedTask.name, lastDeletedTask.id);
             // Restore by sending the task back as a single-item array to restore_tasks
-            socket.emit("restore_tasks", { roomId, tasks: [lastDeletedTask] });
+            void runRoomAction({ type: "restore_tasks", tasks: [lastDeletedTask] });
 
             // Clear state
             setLastDeletedTask(null);
@@ -174,23 +291,23 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
     };
 
     const startVoting = (taskId: string) => {
-        socket.emit("start_voting", { roomId, taskId });
+        void runRoomAction({ type: "start_voting", taskId });
     };
 
     const startTimer = (totalSeconds: number) => {
-        socket.emit("update_timer", { roomId, action: "start", seconds: totalSeconds });
+        void runRoomAction({ type: "update_timer", action: "start", seconds: totalSeconds });
     };
 
     const addTimerMinute = () => {
-        socket.emit("update_timer", { roomId, action: "add_minute" });
+        void runRoomAction({ type: "update_timer", action: "add_minute" });
     };
 
     const restartTimer = () => {
-        socket.emit("update_timer", { roomId, action: "restart" });
+        void runRoomAction({ type: "update_timer", action: "restart" });
     };
 
     const cancelTimer = () => {
-        socket.emit("update_timer", { roomId, action: "cancel" });
+        void runRoomAction({ type: "update_timer", action: "cancel" });
     };
 
     const copyLink = () => {
@@ -211,17 +328,17 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
     );
 
     // Loading state
-    if (!isConnected || !state) {
-        return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-mono animate-pulse">Establishing Comms...</div>;
+    if (isLoading || !state) {
+        return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white font-mono animate-pulse">Syncing Room...</div>;
     }
 
     // Derived state
     const activeDeck = state.deck || ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "?", "☕"];
-    const isAdmin = Boolean(myId) && state.adminId === myId;
+    const isAdmin = Boolean(playerId) && state.adminId === playerId;
     const playersList = Object.values(state.players);
     const votedCount = Object.keys(state.votes).length;
     const totalPlayers = playersList.length;
-    const currentUser = myId ? state.players[myId] : null;
+    const currentUser = playerId ? state.players[playerId] : null;
 
     // Calculate average
     const numericVotes = Object.values(state.votes).map(v => parseFloat(v)).filter(v => !isNaN(v));
@@ -263,7 +380,7 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     isSidebarOpen={isSidebarOpen}
                     onOpenSidebar={() => setSidebarOpen(true)}
                     onCopyLink={copyLink}
-                    onClaimHost={() => socket.emit("claim_host", { roomId, hostKey: getRoomHostKey(roomId) })}
+                    onClaimHost={() => void runRoomAction({ type: "claim_host", hostKey: getRoomHostKey(roomId) })}
                     isHost={isAdmin}
                     timerDuration={state.timerDuration ?? null}
                     votingEndTime={state.votingEndTime ?? null}
@@ -278,11 +395,11 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
                     players={playersList}
                     adminId={state.adminId}
                     votes={state.votes}
+                    reactions={state.reactions}
                     status={state.status}
                     average={average}
                     isHost={isAdmin}
-                    socket={socket}
-                    roomId={roomId}
+                    onSendReaction={(targetPlayerId, emoji) => void runRoomAction({ type: "send_reaction", targetPlayerId, emoji })}
                     onReveal={revealVotes}
                     onReset={resetRound}
                     onEndRound={endRound}
@@ -290,6 +407,11 @@ export default function PokerRoom({ roomId: initialRoomId, userName, avatar }: {
 
                 {/* Footer Controls */}
                 <div className="bg-slate-900/90 border-t border-slate-800 p-4 pb-12 md:pb-8 flex flex-col items-center gap-4 z-20 backdrop-blur">
+                    {actionError && (
+                        <div className="w-full max-w-2xl rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm text-amber-100">
+                            {actionError}
+                        </div>
+                    )}
 
                     {/* Voting Cards */}
                     <VotingCards

@@ -148,25 +148,22 @@ export default function TaskSidebar({
                                 }`}
                         >
                             <div
-                                className="p-2.5 md:p-3 flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
+                                className="p-2.5 md:p-3 flex items-start justify-between gap-2 cursor-pointer hover:bg-slate-700/50 transition-colors"
                                 onClick={() => {
-                                    console.log("Task clicked:", task.id, "Name:", task.name);
-                                    console.log("Task voteDetails:", JSON.stringify(task.voteDetails));
-                                    console.log("Full task object keys:", Object.keys(task));
                                     setExpandedTaskId(expandedTaskId === task.id ? null : task.id);
                                 }}
                             >
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <span className={`text-xs md:text-sm font-medium truncate ${currentTask === task.name ? "text-cyan-300" : "text-slate-300"}`}>
+                                <div className="flex-1 min-w-0 pr-1">
+                                    <span className={`block text-xs md:text-sm font-medium leading-4 whitespace-normal break-words ${currentTask === task.name ? "text-cyan-300" : "text-slate-300"}`}>
                                         {task.name}
                                     </span>
                                     {task.score && (
-                                        <span className="bg-cyan-500/20 text-cyan-300 text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 font-bold">
+                                        <span className="mt-2 inline-flex bg-cyan-500/20 text-cyan-300 text-[10px] px-1.5 py-0.5 rounded border border-cyan-500/30 font-bold">
                                             {task.score}
                                         </span>
                                     )}
                                 </div>
-                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1 self-start pt-0.5" onClick={(e) => e.stopPropagation()}>
                                     {isAdmin && (
                                         <>
                                             <button

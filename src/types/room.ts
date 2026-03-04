@@ -5,6 +5,14 @@ export interface Player {
     isHost?: boolean;
 }
 
+export interface RoomReaction {
+    id: string;
+    playerId: string;
+    senderId: string;
+    emoji: string;
+    createdAt: number;
+}
+
 export interface Task {
     id: string;
     name: string;
@@ -24,8 +32,8 @@ export interface RoomState {
     votes: Record<string, string>;
     adminId: string | null;
     players: Record<string, Player>;
-    deck?: string[];
-    // Timer
-    timerDuration?: number | null;
-    votingEndTime?: number | null;
+    deck: string[];
+    timerDuration: number | null;
+    votingEndTime: number | null;
+    reactions: RoomReaction[];
 }
