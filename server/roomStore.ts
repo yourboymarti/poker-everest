@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { Redis as UpstashRedis } from "@upstash/redis";
 import { logInfo, logWarn } from "./logger";
 
 export interface RoomPlayer {
@@ -43,6 +44,7 @@ export interface Room {
 }
 
 let redis: Redis | null = null;
+let upstash: UpstashRedis | null = null;
 let useInMemory = false;
 const inMemoryRooms: Record<string, Room> = {};
 let initPromise: Promise<void> | null = null;
@@ -62,11 +64,32 @@ export function isPersistentStoreRequired(): boolean {
 }
 
 export function isPersistentStoreMisconfigured(): boolean {
-    return isPersistentStoreRequired() && !process.env.REDIS_URL;
+    if (!isPersistentStoreRequired()) return false;
+    const hasIoRedis = Boolean(process.env.REDIS_URL);
+    const hasUpstash = Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
+    return !hasIoRedis && !hasUpstash;
 }
 
 export async function initRedis(): Promise<void> {
+    const upstashUrl = process.env.UPSTASH_REDIS_REST_URL;
+    const upstashToken = process.env.UPSTASH_REDIS_REST_TOKEN;
     const redisUrl = process.env.REDIS_URL;
+
+    // Prefer Upstash HTTP client (serverless-friendly) when env vars are present
+    if (upstashUrl && upstashToken) {
+        try {
+            logInfo("store.upstash_connect_attempt", {});
+            upstash = new UpstashRedis({ url: upstashUrl, token: upstashToken });
+            // Test connection
+            await upstash.ping();
+            logInfo("store.upstash_connected");
+        } catch {
+            logWarn("store.upstash_unavailable", { fallback: "memory" });
+            upstash = null;
+            useInMemory = true;
+        }
+        return;
+    }
 
     if (!redisUrl && process.env.NODE_ENV === "production") {
         logWarn("store.redis_url_missing", {
@@ -96,7 +119,7 @@ export async function initRedis(): Promise<void> {
                 logWarn("store.redis_retry", { retries: times, delayMs: delay });
                 return delay;
             },
-            connectTimeout: 5000, // Increased timeout
+            connectTimeout: 5000,
         });
 
         // Prevent unhandled error events from crashing the process
@@ -115,7 +138,7 @@ export async function initRedis(): Promise<void> {
 }
 
 async function ensureStoreReady(): Promise<void> {
-    if (redis || useInMemory) {
+    if (redis || upstash || useInMemory) {
         return;
     }
 
@@ -130,9 +153,10 @@ async function ensureStoreReady(): Promise<void> {
 
 export async function getStoreHealth(): Promise<StoreHealth> {
     await ensureStoreReady();
-    const redisConfigured = Boolean(process.env.REDIS_URL);
+    const redisConfigured = Boolean(process.env.REDIS_URL) ||
+        Boolean(process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN);
 
-    if (useInMemory || !redis) {
+    if (useInMemory || (!redis && !upstash)) {
         return {
             mode: "memory",
             redisConfigured,
@@ -142,7 +166,11 @@ export async function getStoreHealth(): Promise<StoreHealth> {
     }
 
     try {
-        await redis.ping();
+        if (upstash) {
+            await upstash.ping();
+        } else {
+            await redis!.ping();
+        }
         return {
             mode: "redis",
             redisConfigured,
@@ -192,6 +220,10 @@ export async function getRoom(roomId: string): Promise<Room | null> {
     }
 
     try {
+        if (upstash) {
+            // Upstash returns parsed JSON automatically
+            return await upstash.get<Room>(ROOM_PREFIX + roomId);
+        }
         const data = await redis?.get(ROOM_PREFIX + roomId);
         return data ? JSON.parse(data) : null;
     } catch {
@@ -208,7 +240,11 @@ export async function setRoom(roomId: string, room: Room): Promise<void> {
     }
 
     try {
-        await redis?.setex(ROOM_PREFIX + roomId, ROOM_TTL, JSON.stringify(room));
+        if (upstash) {
+            await upstash.set(ROOM_PREFIX + roomId, room, { ex: ROOM_TTL });
+        } else {
+            await redis?.setex(ROOM_PREFIX + roomId, ROOM_TTL, JSON.stringify(room));
+        }
     } catch {
         inMemoryRooms[roomId] = room;
     }
@@ -223,7 +259,11 @@ export async function deleteRoom(roomId: string): Promise<void> {
     }
 
     try {
-        await redis?.del(ROOM_PREFIX + roomId);
+        if (upstash) {
+            await upstash.del(ROOM_PREFIX + roomId);
+        } else {
+            await redis?.del(ROOM_PREFIX + roomId);
+        }
     } catch {
         delete inMemoryRooms[roomId];
     }
@@ -237,6 +277,10 @@ export async function getAllRoomIds(): Promise<string[]> {
     }
 
     try {
+        if (upstash) {
+            const keys = await upstash.keys(ROOM_PREFIX + "*");
+            return keys.map((key: string) => key.replace(ROOM_PREFIX, ""));
+        }
         const keys = await redis?.keys(ROOM_PREFIX + "*") || [];
         return keys.map(key => key.replace(ROOM_PREFIX, ""));
     } catch {
